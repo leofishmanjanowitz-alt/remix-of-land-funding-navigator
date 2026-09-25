@@ -1,10 +1,10 @@
-# Remix of Land Funding Navigator
+# Collective Impact
 
 Build a web app called Collective Impact. It helps mission-driven housing developers, Community Development Corporations, and local government housing departments find out what public funding they can use to build affordable housing on a specific piece of land.
 
 The user problem: figuring out which federal, state, and local funding programs apply to a given parcel currently requires reading hundreds of pages of regulations across dozens of agency websites. We make it answerable at an address.
 
-Visual direction. Municipal and civic, not consumer tech. Think plat maps, survey documents, and land records rather than a SaaS dashboard. Palette: dark survey green as primary, warm off-white paper tones as background, muted terracotta as a single accent. Typography should be serious and readable — a clean serif for headings, a workhorse sans for body. Generous whitespace. Avoid gradients, glassmorphism, rounded pill buttons, and emoji. The user is a housing director reviewing this during a workday, not a consumer browsing on a phone.
+Visual direction. Soft civic-tech, matching the Collective Impact site: sky-teal primary, indigo accent, white and frosted-glass card surfaces on a cool off-white background. Quicksand for headings, Poppins for body. Rounded corners (8px buttons, 16px cards), hairline borders, gentle shadows. The landing hero is a full-bleed photo slideshow under a dark scrim. Design tokens live in `src/styles.css`; components should use them rather than hardcoded colors. Small text must meet WCAG AA contrast.
 
 Landing page sections:
 
@@ -22,23 +22,19 @@ Email verification flow. After email submission, show a "check your email" confi
 
 Use mock data throughout. No backend, no real authentication.
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/d3ff9663-60e7-44b2-a25e-b14802d633be).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+You need Node.js 22+ and npm.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+npm install
+npm run dev      # http://localhost:8080
 ```
+
+Other scripts:
+
+- `npm run build` — production build; the Node server bundle is written to `.output/` (run it with `node .output/server/index.mjs`)
+- `npm run lint` — ESLint
+- `npm run format` — Prettier
+
+Feature plans from earlier development are in `docs/plans/`.
