@@ -25,7 +25,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         window.setTimeout(() => setCopied(false), 1600);
       }}
       aria-label={`Copy ${label}`}
-      className="shrink-0 border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      className="shrink-0 border border-border px-1.5 py-0.5 tabular-nums text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-accent hover:text-accent rounded-md"
     >
       {copied ? "Copied" : "Copy"}
     </button>
@@ -54,7 +54,7 @@ function Field({
             href={href}
             target={href.startsWith("http") ? "_blank" : undefined}
             rel={href.startsWith("http") ? "noreferrer" : undefined}
-            className="break-words text-sm leading-snug text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+            className="break-words text-sm leading-snug text-primary-deep underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
           >
             {value}
           </a>
@@ -78,9 +78,9 @@ function ReportProblem({ contact }: { contact: ContactRecord }) {
 
   if (state === "sent") {
     return (
-      <p className="mt-2 border border-dashed border-primary px-2.5 py-1.5 text-xs leading-relaxed text-primary">
-        Flagged for re-verification. We will re-confirm this contact with{" "}
-        {contact.body} and update the record.
+      <p className="mt-2 border border-dashed border-accent px-2.5 py-1.5 text-xs leading-relaxed text-accent rounded-lg">
+        Flagged for re-verification. We will re-confirm this contact with {contact.body} and update
+        the record.
       </p>
     );
   }
@@ -93,7 +93,7 @@ function ReportProblem({ contact }: { contact: ContactRecord }) {
       "Link goes to the wrong page",
     ];
     return (
-      <div className="mt-2 border border-border p-2.5">
+      <div className="mt-2 border border-border p-2.5 rounded-lg">
         <p className="rule-label">What is out of date?</p>
         <ul className="mt-1.5 space-y-1">
           {options.map((o) => (
@@ -116,14 +116,14 @@ function ReportProblem({ contact }: { contact: ContactRecord }) {
             type="button"
             disabled={!reason}
             onClick={() => setState("sent")}
-            className="border border-primary px-2.5 py-1 text-xs text-primary transition-colors hover:bg-secondary disabled:border-border disabled:text-muted-foreground"
+            className="border border-accent px-2.5 py-1 text-xs text-accent transition-colors hover:bg-secondary disabled:border-border disabled:text-muted-foreground rounded-md"
           >
             Submit
           </button>
           <button
             type="button"
             onClick={() => setState("idle")}
-            className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
+            className="tabular-nums text-[11px] text-muted-foreground hover:text-foreground"
           >
             Cancel
           </button>
@@ -136,7 +136,7 @@ function ReportProblem({ contact }: { contact: ContactRecord }) {
     <button
       type="button"
       onClick={() => setState("open")}
-      className="mt-2 font-mono text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-accent"
+      className="mt-2 tabular-nums text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-accent"
     >
       Report this contact as out of date
     </button>
@@ -169,9 +169,9 @@ export function ContactBlock({
           </p>
         </div>
         <span
-          className={`shrink-0 border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
-            named ? "border-primary text-primary" : "border-accent text-accent"
-          }`}
+          className={`shrink-0 border px-1.5 py-0.5 tabular-nums text-[10px] uppercase tracking-wide ${
+            named ? "border-accent text-accent" : "border-accent text-accent"
+          } rounded-md`}
         >
           {named ? "Named contact" : "General — department"}
         </span>
@@ -190,7 +190,9 @@ export function ContactBlock({
             label="Email"
             value={contact.email}
             href={`mailto:${contact.email}`}
-            note={contact.emailIsShared ? "Shared department inbox, not a personal address." : undefined}
+            note={
+              contact.emailIsShared ? "Shared department inbox, not a personal address." : undefined
+            }
           />
         )}
         {contact.phone && (
@@ -216,10 +218,8 @@ export function ContactBlock({
       </div>
 
       <div className="border-t border-border px-3 py-2">
-        {children && (
-          <p className="mb-2 text-sm leading-relaxed text-foreground">{children}</p>
-        )}
-        <p className="font-mono text-[11px] text-muted-foreground">
+        {children && <p className="mb-2 text-sm leading-relaxed text-foreground">{children}</p>}
+        <p className="tabular-nums text-[11px] text-muted-foreground">
           Last verified {formatVerified(contact.lastVerified)}
           {contact.verifiedBy ? ` · ${contact.verifiedBy}` : ""}
         </p>

@@ -23,7 +23,7 @@ export function ReportAssistanceInterest({
 
   return (
     <section className={className}>
-      <h3 className="rule-label border-b border-primary pb-2">
+      <h3 className="rule-label border-b border-border pb-2">
         11. Would you like assistance with any of this?
       </h3>
       <div className="mt-4">
@@ -34,7 +34,7 @@ export function ReportAssistanceInterest({
           id="report-assist-program"
           value={program.id}
           onChange={(e) => setProgramId(e.target.value)}
-          className="mt-1.5 w-full border border-border bg-paper px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+          className="mt-1.5 w-full border border-border bg-paper px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none rounded-lg"
         >
           {programs.map((p) => (
             <option key={p.id} value={p.id}>

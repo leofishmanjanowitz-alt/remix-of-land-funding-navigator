@@ -139,7 +139,7 @@ export function ParcelChat({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t-2 border-primary bg-paper">
+    <div className="flex h-full min-h-0 flex-col border-t border-border bg-paper">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-paper-deep px-4 py-2.5">
         <div>
           <p className="rule-label">Ask about this parcel</p>
@@ -168,13 +168,13 @@ export function ParcelChat({
             {messages.map((m) =>
               m.role === "user" ? (
                 <ChatMessage key={m.id} from="user">
-                  <MessageContent className="rounded-none border border-primary bg-primary px-3 py-2 text-primary-foreground">
+                  <MessageContent className="border border-primary bg-primary px-3 py-2 text-primary-foreground">
                     {m.text}
                   </MessageContent>
                 </ChatMessage>
               ) : m.role === "system" ? (
                 <ChatMessage key={m.id} from="assistant">
-                  <MessageContent className="w-full border-l-2 border-accent bg-secondary/40 px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground">
+                  <MessageContent className="w-full border-l-2 border-accent bg-secondary/40 px-3 py-2 tabular-nums text-[11px] leading-relaxed text-foreground">
                     {m.text}
                   </MessageContent>
                 </ChatMessage>
@@ -197,10 +197,10 @@ export function ParcelChat({
                               disabled={used}
                               onClick={() => runAction(m.id, a)}
                               variant="outline"
-                              className={`h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm leading-snug whitespace-normal ${
+                              className={`h-auto w-full justify-start px-3 py-2 text-left text-sm leading-snug whitespace-normal ${
                                 used
                                   ? "border-border text-muted-foreground"
-                                  : "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                                  : "border-accent text-accent hover:bg-primary hover:text-primary-foreground"
                               }`}
                             >
                               {used && <Check aria-hidden="true" />}
@@ -216,18 +216,18 @@ export function ParcelChat({
             )}
             <ReferenceList className="border-t border-border pt-4" />
           </ConversationContent>
-          <ConversationScrollButton className="rounded-none" />
+          <ConversationScrollButton className="" />
         </Conversation>
       </CitationScope>
 
       <div className="shrink-0 border-t border-border bg-paper-deep px-4 py-3">
         {locked && (
-          <div className="border border-accent p-3">
+          <div className="border border-accent p-3 rounded-lg">
             <p className="text-sm leading-relaxed text-foreground">
               You've used your three free questions. Full access includes unlimited questions,
               parcel reports, and the complete source library. Address lookups remain available.
             </p>
-            <Button className="mt-3 w-full rounded-none" disabled>
+            <Button className="mt-3 w-full" disabled>
               Upgrade for unlimited questions
             </Button>
           </div>
@@ -240,7 +240,7 @@ export function ParcelChat({
                 onClick={() => submitInput(s)}
                 variant="outline"
                 size="sm"
-                className="h-auto rounded-none px-2 py-1 text-left text-xs whitespace-normal text-muted-foreground hover:border-primary hover:text-primary"
+                className="h-auto px-2 py-1 text-left text-xs whitespace-normal text-muted-foreground hover:border-accent hover:text-accent"
               >
                 {s}
               </Button>
@@ -250,7 +250,7 @@ export function ParcelChat({
         <div className={locked ? "mt-3" : undefined}>
           <PromptInput
             onSubmit={({ text }) => submitInput(text)}
-            className="[&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-primary [&_[data-slot=input-group]]:bg-paper"
+            className="[&_[data-slot=input-group]]:border-border [&_[data-slot=input-group]]:bg-paper"
           >
             <PromptInputTextarea
               ref={inputRef}
@@ -261,15 +261,15 @@ export function ParcelChat({
               className="min-h-16 text-sm"
             />
             <PromptInputFooter className="justify-between">
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span className="tabular-nums text-[10px] text-muted-foreground">
                 {locked ? "Address lookup" : "Address or question"}
               </span>
-              <PromptInputSubmit className="rounded-none" disabled={false}>
+              <PromptInputSubmit className="" disabled={false}>
                 <ArrowRight aria-hidden="true" />
               </PromptInputSubmit>
             </PromptInputFooter>
           </PromptInput>
-          <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+          <p className="mt-2 tabular-nums text-[11px] text-muted-foreground">
             {remaining} of {FREE_QUESTIONS} free questions remaining · address lookups are free
           </p>
         </div>

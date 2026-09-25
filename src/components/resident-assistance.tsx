@@ -38,7 +38,7 @@ export function FundingViewTabs({
             className={`px-3 py-2.5 text-left transition-colors ${
               on
                 ? "bg-primary text-primary-foreground"
-                : "bg-paper-deep text-muted-foreground hover:text-primary"
+                : "bg-paper-deep text-muted-foreground hover:text-accent"
             }`}
           >
             <span className="block text-xs font-medium tracking-wide">{t.label}</span>
@@ -68,8 +68,8 @@ function Segmented({
           aria-pressed={value === k}
           className={`flex-1 px-3 py-1.5 text-[11px] tracking-wide transition-colors ${
             value === k
-              ? "bg-secondary text-primary"
-              : "text-muted-foreground hover:text-primary"
+              ? "bg-secondary text-primary-deep"
+              : "text-muted-foreground hover:text-accent"
           }`}
         >
           {k === "renter" ? "Renter assistance" : "Homebuyer assistance"}
@@ -89,8 +89,8 @@ export function ResidentAssistance({
   return (
     <div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Assistance below goes to households, not to the project. It never appears in the
-        development capital stack.
+        Assistance below goes to households, not to the project. It never appears in the development
+        capital stack.
       </p>
       <div className="mt-3">
         <Segmented value={view} onChange={onViewChange} />
@@ -119,9 +119,9 @@ function RenterView() {
             <li key={p.id} className="border-b border-border py-4 last:border-b-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11px] leading-tight tracking-wide ${meta.badgeClass}`}
+                  className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11px] leading-tight tracking-wide ${meta.badgeClass} rounded-md`}
                 >
-                  <span aria-hidden className="font-mono text-[10px]">
+                  <span aria-hidden className="tabular-nums text-[10px]">
                     {meta.glyph}
                   </span>
                   {meta.label}
@@ -164,13 +164,15 @@ function BuyerView() {
       <div className="mt-4 space-y-5">
         {BUYER_PROVIDERS.map((prov) => (
           <div key={prov.id} className="border-t border-border pt-4">
-            <h3 className="font-serif text-lg leading-snug text-primary">{prov.provider}</h3>
+            <h3 className="font-heading font-bold text-lg leading-snug text-foreground">
+              {prov.provider}
+            </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {prov.kind} · {LEVEL_META[prov.level].label}
             </p>
 
             {prov.coverage === "gap" || prov.programs.length === 0 ? (
-              <p className="mt-3 border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent">
+              <p className="mt-3 border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent rounded-lg">
                 Not yet loaded — programs from this provider are not in the library. This is not a
                 finding that no assistance exists.
               </p>
@@ -184,7 +186,7 @@ function BuyerView() {
                     </p>
                     <div className="mt-1.5 flex flex-wrap gap-2">
                       <span
-                        className={`border px-2 py-0.5 text-[11px] leading-tight tracking-wide ${FORM_META[p.form].badgeClass}`}
+                        className={`border px-2 py-0.5 text-[11px] leading-tight tracking-wide ${FORM_META[p.form].badgeClass} rounded-md`}
                       >
                         {FORM_META[p.form].label}
                       </span>

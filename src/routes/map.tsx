@@ -186,11 +186,11 @@ function MapPage() {
           <button
             onClick={() => setTasksOpen(true)}
             aria-label="Open task list"
-            className="pointer-events-auto flex items-center gap-2 border border-border bg-paper px-3 py-2 text-sm text-foreground hover:border-primary hover:text-primary"
+            className="pointer-events-auto flex items-center gap-2 border border-border bg-paper px-3 py-2 text-sm text-foreground hover:border-accent hover:text-accent rounded-md"
           >
             <span className="rule-label">Tasks</span>
             {openTaskCount > 0 && (
-              <span className="flex h-5 min-w-[1.25rem] items-center justify-center bg-accent px-1.5 text-[11px] font-medium text-primary-foreground">
+              <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-medium text-accent-foreground">
                 {openTaskCount}
               </span>
             )}
@@ -213,7 +213,7 @@ function MapPage() {
           <button
             onClick={() => setChatOpen(true)}
             aria-label="Open AI assistant"
-            className="absolute bottom-3 right-16 z-20 border border-primary bg-primary px-4 py-2.5 text-left text-primary-foreground shadow-sm transition-colors hover:bg-primary-deep"
+            className="absolute bottom-3 right-16 z-20 border border-primary bg-primary px-4 py-2.5 text-left text-primary-foreground shadow-card transition-colors hover:bg-primary-hover rounded-lg"
           >
             <span className="block text-xs font-medium">AI assistant</span>
             <span className="block text-[10px] text-primary-foreground/80">
@@ -222,7 +222,7 @@ function MapPage() {
           </button>
         )}
 
-        <div className="absolute bottom-3 left-3 z-10 rule-label bg-paper/85 px-2 py-1">
+        <div className="absolute bottom-3 left-3 z-10 rule-label rounded-md bg-paper/85 px-2 py-1 backdrop-blur-sm">
           Tulsa, Oklahoma · sample parcel data
         </div>
       </div>
@@ -241,7 +241,7 @@ function MapPage() {
           />
         </div>
         {chatOpen ? (
-          <div className="fixed bottom-3 right-3 z-40 h-[min(70vh,36rem)] w-[min(400px,calc(100vw-1.5rem))] border border-border shadow-lg lg:static lg:h-auto lg:min-h-0 lg:w-auto lg:flex-1 lg:border-0 lg:shadow-none">
+          <div className="fixed bottom-3 right-3 z-40 h-[min(70vh,36rem)] w-[min(400px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border shadow-popover lg:rounded-none lg:static lg:h-auto lg:min-h-0 lg:w-auto lg:flex-1 lg:border-0 lg:shadow-none">
             <ParcelChat
               parcel={selected}
               onSelectParcel={setSelected}
@@ -370,8 +370,8 @@ function MapCanvas({
     // (tiles 200, panes 400+, controls 1000) stay inside the map and cannot
     // paint over the sibling search bar, task button, or layer panel (z-20).
     <div className="absolute inset-0 z-0">
-      <ClientOnly fallback={<div className="survey-grid absolute inset-0 bg-paper-deep" />}>
-        <Suspense fallback={<div className="survey-grid absolute inset-0 bg-paper-deep" />}>
+      <ClientOnly fallback={<div className="band-soft absolute inset-0" />}>
+        <Suspense fallback={<div className="band-soft absolute inset-0" />}>
           <BaseMap femaFloodplain={!!active.fema} geoLayers={geoLayers} focus={focus}>
             {artwork}
           </BaseMap>
@@ -541,10 +541,12 @@ function SidePanel({
       <LevelFilterScope value={levelFilter}>
         <div className="flex min-h-full flex-col">
           <div className="border-b border-border px-6 py-5">
-            <Link to="/" className="rule-label hover:text-primary">
+            <Link to="/" className="rule-label hover:text-accent">
               ← Collective Impact
             </Link>
-            <h1 className="mt-3 font-serif text-2xl leading-snug text-primary">{parcel.address}</h1>
+            <h1 className="mt-3 font-heading font-bold text-2xl leading-snug text-foreground">
+              {parcel.address}
+            </h1>
             <p className="text-sm text-muted-foreground">Tulsa, OK</p>
           </div>
 
@@ -570,7 +572,7 @@ function SidePanel({
                 {overlays.map((l) => (
                   <span
                     key={l.id}
-                    className="border px-2 py-0.5 text-xs"
+                    className="border px-2 py-0.5 text-xs rounded-md"
                     style={{ color: l.color, borderColor: l.color }}
                   >
                     {l.short}
@@ -586,7 +588,7 @@ function SidePanel({
               <>
                 <p className="text-sm text-foreground">
                   {tract.name}
-                  <span className="ml-2 font-mono text-xs text-muted-foreground">
+                  <span className="ml-2 tabular-nums text-xs text-muted-foreground">
                     {tract.geoid}
                   </span>
                 </p>
@@ -628,7 +630,7 @@ function SidePanel({
                 </p>
               </>
             ) : (
-              <p className="border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent">
+              <p className="border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent rounded-lg">
                 Tract-level figures for this parcel are not yet loaded. This is not a finding that
                 the tract fails the tests.
               </p>
@@ -668,7 +670,7 @@ function SidePanel({
                   </div>
                 )}
                 {infill.length > 0 && (
-                  <div className="mb-4 border border-border px-3 py-3">
+                  <div className="mb-4 border border-border px-3 py-3 rounded-lg">
                     <p className="rule-label">Zoning overlays on this parcel</p>
                     <ul className="mt-1.5 space-y-1.5">
                       {infill.map((l) => (
@@ -676,7 +678,7 @@ function SidePanel({
                           {l.name}
                           <Cite id={`ov-${l.id}`} />
                           {l.favorable && (
-                            <span className="ml-2 border border-primary bg-primary px-1.5 py-0.5 text-[10px] tracking-wide text-primary-foreground">
+                            <span className="ml-2 border border-primary bg-primary px-1.5 py-0.5 text-[10px] tracking-wide text-primary-foreground rounded-md">
                               Favorable for housing
                             </span>
                           )}
@@ -813,7 +815,7 @@ function SidePanel({
             <ul className="mt-2 space-y-1.5">
               {zoning.permitted.map((t) => (
                 <li key={t} className="flex gap-2 text-sm text-foreground">
-                  <span className="text-primary">▪</span>
+                  <span className="text-primary-deep">▪</span>
                   {t}
                 </li>
               ))}
@@ -848,7 +850,7 @@ function SidePanel({
           <div className="mt-auto border-t border-border bg-paper-deep p-6">
             <button
               onClick={onGenerateReport}
-              className="w-full border border-primary bg-primary px-4 py-3.5 text-sm font-medium tracking-wide text-primary-foreground transition-colors hover:bg-primary-deep"
+              className="w-full border border-primary bg-primary px-4 py-3.5 text-sm font-medium tracking-wide text-primary-foreground transition-colors hover:bg-primary-hover rounded-md"
             >
               Generate report for this parcel
             </button>
@@ -884,7 +886,9 @@ function Measure({
         <Cite id={citeId} />
       </dt>
       <dd>
-        <span className={`font-mono text-sm ${passes ? "text-primary" : "text-foreground"}`}>
+        <span
+          className={`tabular-nums text-sm ${passes ? "text-primary-deep" : "text-foreground"}`}
+        >
           {value}
         </span>
         <span className="ml-2 text-xs text-muted-foreground">{threshold}</span>
@@ -917,7 +921,7 @@ function Fact({
   return (
     <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-2.5">
       <dt className="rule-label pt-0.5">{label}</dt>
-      <dd className={`text-sm text-foreground ${mono ? "font-mono" : ""}`}>
+      <dd className={`text-sm text-foreground ${mono ? "tabular-nums" : ""}`}>
         {value}
         {citeId && <Cite id={citeId} />}
       </dd>
@@ -957,7 +961,7 @@ function ProgramRow({
           <span className="mt-0.5 block text-xs text-muted-foreground">{program.agency}</span>
         </span>
         <span
-          className={`shrink-0 border px-2 py-0.5 text-[11px] leading-tight ${statusClass(program.status)}`}
+          className={`shrink-0 border px-2 py-0.5 text-[11px] leading-tight ${statusClass(program.status)} rounded-md`}
         >
           {program.status}
         </span>
@@ -1032,7 +1036,7 @@ function ChdoRouteNote({
     route === "designated"
       ? "border-primary bg-primary text-primary-foreground"
       : route === "certify"
-        ? "border-primary text-primary"
+        ? "border-accent text-accent"
         : "border-accent text-accent";
 
   return (
@@ -1047,7 +1051,7 @@ function ChdoRouteNote({
       {copy ? (
         <div className="mt-2.5 border-l-2 border-primary pl-3">
           <span
-            className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${badgeClass}`}
+            className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${badgeClass} rounded-md`}
           >
             {copy.badge}
           </span>

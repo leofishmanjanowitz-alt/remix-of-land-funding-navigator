@@ -50,7 +50,7 @@ function resolveColor(color: string): string {
   const m = /^var\((--[^),]+)\)$/.exec(color.trim());
   if (!m || !m[1]) return color;
   const v = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
-  return v || "#1f5d4c";
+  return v || "#2f6b7a";
 }
 
 function escapeHtml(value: string): string {
@@ -220,7 +220,7 @@ export function BaseMap({
       <div ref={hostRef} className="h-full w-full bg-paper-deep" />
       {createPortal(children, svgEl)}
 
-      <div className="absolute bottom-3 right-3 z-[500] flex flex-col border border-border bg-paper">
+      <div className="absolute bottom-3 right-3 z-[500] flex flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-card">
         <button
           onClick={() => mapRef.current?.zoomIn()}
           aria-label="Zoom in"
@@ -238,7 +238,7 @@ export function BaseMap({
         <button
           onClick={() => mapRef.current?.fitBounds(BOUNDS)}
           aria-label="Reset view"
-          className="h-9 w-9 font-mono text-[10px] text-muted-foreground hover:bg-secondary"
+          className="h-9 w-9 tabular-nums text-[10px] text-muted-foreground hover:bg-secondary"
         >
           RST
         </button>

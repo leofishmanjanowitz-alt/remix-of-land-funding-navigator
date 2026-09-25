@@ -21,10 +21,10 @@ import type { UnitSize } from "@/lib/underwriting";
 
 /* ------------------------------ color scales ----------------------------- */
 
-/** Graduated green ramp. fraction 0 = lightest, 1 = darkest. */
+/** Graduated teal ramp (primary hue). fraction 0 = lightest, 1 = darkest. */
 export function ramp(fraction: number): string {
   const f = Math.max(0, Math.min(1, fraction));
-  return `oklch(${(0.94 - 0.42 * f).toFixed(3)} ${(0.03 + 0.09 * f).toFixed(3)} 165)`;
+  return `oklch(${(0.95 - 0.47 * f).toFixed(3)} ${(0.025 + 0.075 * f).toFixed(3)} 215)`;
 }
 
 export function choroplethRange(id: ChoroplethId, unit: UnitSize): [number, number] {
@@ -114,7 +114,7 @@ export function LayerControl({
 
   return (
     <div
-      className={`absolute left-3 z-20 w-[19rem] max-w-[calc(100%-1.5rem)] border border-border bg-paper transition-[top] ${className}`}
+      className={`absolute left-3 z-20 w-[19rem] max-w-[calc(100%-1.5rem)] overflow-hidden rounded-2xl border border-border bg-paper/90 shadow-panel backdrop-blur-[16px] transition-[top] ${className}`}
     >
       <button
         onClick={() => setOpen((o) => !o)}
@@ -123,11 +123,11 @@ export function LayerControl({
       >
         <span className="flex items-center gap-2">
           <span className="rule-label">Map layers</span>
-          <span className="flex h-5 min-w-[1.25rem] items-center justify-center bg-primary px-1.5 font-mono text-[11px] text-primary-foreground">
+          <span className="flex h-5 min-w-[1.25rem] items-center justify-center bg-primary px-1.5 tabular-nums text-[11px] text-primary-foreground">
             {activeCount}
           </span>
         </span>
-        <span className="font-mono text-xs text-muted-foreground">{open ? "–" : "+"}</span>
+        <span className="tabular-nums text-xs text-muted-foreground">{open ? "–" : "+"}</span>
       </button>
 
       {open && (
@@ -170,7 +170,7 @@ export function LayerControl({
             open={openCats.C}
             onToggle={() => toggleCat("C")}
           >
-            <p className="mb-2 border border-accent px-2 py-1 text-[11px] leading-relaxed text-accent">
+            <p className="mb-2 border border-accent px-2 py-1 text-[11px] leading-relaxed text-accent rounded-lg">
               {RENT_EFFECTIVE_NOTE}
             </p>
             <ChoroList items={catCChoro} value={choropleth} onChange={onChoropleth} />
@@ -185,8 +185,8 @@ export function LayerControl({
                     className={`border px-2 py-1 text-[11px] leading-none transition-colors ${
                       unit === u.id
                         ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-                    }`}
+                        : "border-border text-muted-foreground hover:border-accent hover:text-accent"
+                    } rounded-md`}
                   >
                     {u.label}
                   </button>
@@ -241,8 +241,8 @@ function CategorySection({
           </span>
         </span>
         <span className="mt-0.5 flex items-center gap-1.5">
-          {count > 0 && <span className="font-mono text-[11px] text-primary">{count}</span>}
-          <span className="font-mono text-xs text-muted-foreground">{open ? "–" : "+"}</span>
+          {count > 0 && <span className="tabular-nums text-[11px] text-primary-deep">{count}</span>}
+          <span className="tabular-nums text-xs text-muted-foreground">{open ? "–" : "+"}</span>
         </span>
       </button>
       {open && <div className="px-3 pb-3">{children}</div>}
@@ -281,7 +281,7 @@ function BoundaryList({
             />
             <span
               aria-hidden
-              className="mt-1 inline-block h-3 w-3 shrink-0 border"
+              className="mt-1 inline-block h-3 w-3 shrink-0 border rounded-sm"
               style={{ backgroundColor: l.color, opacity: 0.45, borderColor: l.color }}
             />
             <span className="leading-tight">
@@ -291,14 +291,14 @@ function BoundaryList({
               </span>
               <span className="block text-[11px] text-muted-foreground">{l.description}</span>
               {isGisLayer(l.id) && (
-                <span className="mt-1 block font-mono text-[10px] text-muted-foreground">
+                <span className="mt-1 block tabular-nums text-[10px] text-muted-foreground">
                   {active[l.id]
                     ? (STATUS_TEXT[gisStatus[l.id] ?? "loading"] ?? "")
                     : GIS_SOURCES[l.id].attribution}
                 </span>
               )}
               {l.favorable && (
-                <span className="mt-1 inline-block border border-primary bg-secondary px-1.5 py-0.5 text-[10px] tracking-wide text-primary">
+                <span className="mt-1 inline-block border border-accent bg-accent/5 px-1.5 py-0.5 text-[10px] tracking-wide text-accent rounded-md">
                   Favorable for housing
                 </span>
               )}
@@ -372,7 +372,8 @@ function ChoroLegend({ id, unit }: { id: ChoroplethId; unit: UnitSize }) {
             <span className="h-3 w-6 bg-primary" /> Meets either test — eligible
           </li>
           <li className="flex items-center gap-2">
-            <span className="h-3 w-6 border border-border bg-secondary" /> Meets neither test
+            <span className="h-3 w-6 border border-border bg-secondary rounded-sm" /> Meets neither
+            test
           </li>
         </ul>
       ) : (
@@ -382,7 +383,7 @@ function ChoroLegend({ id, unit }: { id: ChoroplethId; unit: UnitSize }) {
               <span key={f} className="flex-1" style={{ backgroundColor: ramp(f) }} />
             ))}
           </div>
-          <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
+          <div className="mt-1 flex justify-between tabular-nums text-[10px] text-muted-foreground">
             <span>{fmt(lo)}</span>
             <span>{fmt(hi)}</span>
           </div>

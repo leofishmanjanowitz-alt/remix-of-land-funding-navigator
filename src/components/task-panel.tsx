@@ -16,7 +16,7 @@ export function TaskPanel({
   const openCount = tasks.filter((t) => !t.completed).length;
 
   return (
-    <div className="absolute inset-y-0 right-0 z-30 flex w-80 flex-col border-l border-border bg-paper shadow-[0_0_0_1px_var(--color-border)]">
+    <div className="absolute inset-y-0 right-0 z-30 flex w-80 flex-col border-l border-border bg-paper shadow-panel">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-paper-deep px-4 py-3">
         <div>
           <h2 className="rule-label">Task list</h2>
@@ -27,7 +27,7 @@ export function TaskPanel({
         <button
           onClick={onClose}
           aria-label="Close task list"
-          className="font-mono text-sm text-muted-foreground hover:text-foreground"
+          className="tabular-nums text-sm text-muted-foreground hover:text-foreground"
         >
           ✕
         </button>
@@ -43,7 +43,7 @@ export function TaskPanel({
             {tasks.map((task) => (
               <li
                 key={task.id}
-                className="flex gap-3 border border-border bg-paper-deep p-3"
+                className="flex gap-3 border border-border bg-paper-deep p-3 rounded-lg"
               >
                 <input
                   type="checkbox"
@@ -55,20 +55,14 @@ export function TaskPanel({
                 <div className="flex-1">
                   <p
                     className={`text-sm leading-snug ${
-                      task.completed
-                        ? "text-muted-foreground line-through"
-                        : "text-foreground"
+                      task.completed ? "text-muted-foreground line-through" : "text-foreground"
                     }`}
                   >
                     {task.title}
                   </p>
-                  {task.dueDate && (
-                    <p className="mt-1.5 text-xs text-accent">Due {task.dueDate}</p>
-                  )}
+                  {task.dueDate && <p className="mt-1.5 text-xs text-accent">Due {task.dueDate}</p>}
                   {task.contact && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Contact: {task.contact}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Contact: {task.contact}</p>
                   )}
                 </div>
               </li>

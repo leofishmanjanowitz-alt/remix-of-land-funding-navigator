@@ -44,15 +44,15 @@ export function AssistanceInterest({
 
   if (submitted) {
     return (
-      <div className={`border-2 border-primary bg-secondary p-4 ${className}`}>
+      <div className={`border border-accent/20 bg-accent/5 p-4 ${className} rounded-2xl`}>
         <p className="rule-label">Request noted</p>
         <p className="mt-2 text-sm leading-relaxed text-foreground">
           Your interest in {ASSISTANCE_TYPE_LABEL[submitted].toLowerCase()} for {programName} has
           been recorded. Someone will follow up.
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Nothing is committed and no provider has been assigned. You can change or add a request
-          at any time.
+          Nothing is committed and no provider has been assigned. You can change or add a request at
+          any time.
         </p>
         <button
           onClick={() => {
@@ -60,7 +60,7 @@ export function AssistanceInterest({
             setSelected(null);
             setNote("");
           }}
-          className="mt-3 border border-primary px-3 py-1.5 text-xs text-primary hover:bg-paper"
+          className="mt-3 border border-accent px-3 py-1.5 text-xs text-accent hover:bg-paper rounded-md"
         >
           Request a different kind of help
         </button>
@@ -69,7 +69,7 @@ export function AssistanceInterest({
   }
 
   return (
-    <div className={`border border-border bg-paper-deep p-4 ${className}`}>
+    <div className={`border border-border bg-paper-deep p-4 ${className} rounded-2xl`}>
       <p className="rule-label">Would you like assistance with this?</p>
       <p className="mt-2 text-sm leading-relaxed text-foreground">
         Tell us what kind of help would be useful for {programName}. These are different kinds of
@@ -85,8 +85,8 @@ export function AssistanceInterest({
                 onClick={() => setSelected(on ? null : t.id)}
                 aria-pressed={on}
                 className={`w-full border px-3 py-2 text-left transition-colors ${
-                  on ? "border-primary bg-secondary" : "border-border hover:border-primary"
-                }`}
+                  on ? "border-accent bg-secondary" : "border-border hover:border-accent"
+                } rounded-md`}
               >
                 <span className="block text-sm font-medium text-foreground">{t.label}</span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
@@ -100,10 +100,7 @@ export function AssistanceInterest({
 
       {selected && (
         <div className="mt-3">
-          <label
-            htmlFor={`assist-note-${programId}`}
-            className="rule-label block"
-          >
+          <label htmlFor={`assist-note-${programId}`} className="rule-label block">
             Anything specific? (optional)
           </label>
           <textarea
@@ -112,11 +109,11 @@ export function AssistanceInterest({
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             placeholder="Timing, scope, what you have already done."
-            className="mt-1.5 w-full border border-border bg-paper px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="mt-1.5 w-full border border-border bg-paper px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none rounded-lg"
           />
           <button
             onClick={() => submit(selected)}
-            className="mt-2 w-full border border-primary bg-primary px-4 py-2.5 text-sm tracking-wide text-primary-foreground hover:bg-primary-deep"
+            className="mt-2 w-full border border-primary bg-primary px-4 py-2.5 text-sm tracking-wide text-primary-foreground hover:bg-primary-hover rounded-md"
           >
             Send this request
           </button>

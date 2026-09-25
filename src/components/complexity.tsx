@@ -7,9 +7,9 @@ import {
 } from "@/lib/complexity";
 
 function levelClass(level: ComplexityLevel) {
-  if (level === "in-house") return "border-primary text-primary";
+  if (level === "in-house") return "border-accent text-accent";
   if (level === "specialist-recommended") return "border-accent text-accent";
-  return "border-accent bg-accent text-primary-foreground";
+  return "border-accent bg-accent text-accent-foreground";
 }
 
 /** One honest line on what the application involves. The reason carries the weight. */
@@ -27,11 +27,11 @@ export function ComplexityNote({
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="rule-label">Application difficulty</span>
         <span
-          className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${levelClass(c.level)}`}
+          className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${levelClass(c.level)} rounded-md`}
         >
           {COMPLEXITY_LABEL[c.level]}
         </span>
-        <span className="font-mono text-[11px] text-muted-foreground">
+        <span className="tabular-nums text-[11px] text-muted-foreground">
           {COMPLEXITY_BLURB[c.level]}
         </span>
       </div>

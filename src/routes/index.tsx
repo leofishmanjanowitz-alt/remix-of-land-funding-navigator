@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 
 export const Route = createFileRoute("/")({
@@ -51,6 +51,61 @@ function Index() {
   );
 }
 
+const HERO_PHOTOS = [
+  "/images/hero/hero-1.jpg",
+  "/images/hero/hero-2.jpg",
+  "/images/hero/hero-3.jpg",
+  "/images/hero/hero-4.jpg",
+];
+
+/** Full-bleed crossfading photo backdrop with a dark scrim for legible white text. */
+function PhotoBackdrop() {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setActive((i) => (i + 1) % HERO_PHOTOS.length), 5000);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  return (
+    <>
+      <div className="absolute inset-0 z-0 bg-[oklch(0.278_0.022_221)]" aria-hidden="true">
+        {HERO_PHOTOS.map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt=""
+            loading={i === 0 ? "eager" : "lazy"}
+            fetchPriority={i === 0 ? "high" : "low"}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
+              i === active ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        ))}
+      </div>
+      <div
+        className="absolute inset-0 z-[1] bg-[linear-gradient(90deg,oklch(0.2_0.02_221/0.78)_0%,oklch(0.2_0.02_221/0.5)_50%,oklch(0.2_0.02_221/0.28)_100%),linear-gradient(180deg,oklch(0.2_0.02_221/0.18),oklch(0.2_0.02_221/0.5))]"
+        aria-hidden="true"
+      />
+      <div className="absolute bottom-6 left-1/2 z-[2] flex -translate-x-1/2 gap-2.5">
+        {HERO_PHOTOS.map((src, i) => (
+          <button
+            key={src}
+            type="button"
+            aria-label={`Show image ${i + 1}`}
+            aria-pressed={i === active}
+            onClick={() => setActive(i)}
+            className={`h-[9px] w-[9px] cursor-pointer rounded-full transition-[background-color,transform] duration-300 ${
+              i === active ? "scale-115 bg-accent" : "bg-white/45 hover:bg-white/70"
+            }`}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
 function Hero({
   email,
   setEmail,
@@ -61,13 +116,17 @@ function Hero({
   onSubmit: () => void;
 }) {
   return (
-    <section className="survey-grid border-b border-border bg-paper">
-      <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
-        <p className="rule-label">Parcel-level funding research</p>
-        <h1 className="mt-6 max-w-3xl font-serif text-4xl leading-[1.12] text-primary md:text-6xl">
-          Find out what public funding a parcel qualifies for before you buy it.
+    <section className="relative flex min-h-[calc(92vh-68px)] items-center overflow-hidden text-white">
+      <PhotoBackdrop />
+      <div className="relative z-[2] mx-auto w-full max-w-6xl px-6 py-24 md:py-32">
+        <p className="text-[13px] font-medium tracking-[0.22em] text-white/75 uppercase">
+          Parcel-level funding research
+        </p>
+        <h1 className="mt-5 max-w-3xl text-4xl leading-[1.08] tracking-[-0.5px] text-white [text-shadow:0_2px_28px_rgb(0_0_0/0.3)] md:text-[58px]">
+          Find out what public funding a parcel qualifies for{" "}
+          <span className="text-primary">before you buy it.</span>
         </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-white/85">
           Collective Impact reads federal, state, and local housing programs against a single piece
           of land — tax credits, block grants, trust funds, tax increment districts — and tells you
           which ones apply and what they require.
@@ -90,11 +149,11 @@ function Hero({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="name@housingauthority.gov"
-            className="h-12 flex-1 border border-input bg-background px-4 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-ring"
+            className="h-12 w-full rounded-lg border sm:w-auto sm:flex-1 border-white/20 bg-white px-4 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-accent focus:ring-[3px] focus:ring-ring/25"
           />
           <button
             type="submit"
-            className="h-12 border border-primary bg-primary px-6 text-sm font-medium tracking-wide text-primary-foreground transition-colors hover:bg-primary-deep"
+            className="h-12 cursor-pointer rounded-lg bg-primary px-[26px] text-base font-medium text-primary-foreground transition-colors hover:bg-primary-hover active:translate-y-px"
           >
             Get map access
           </button>
@@ -114,11 +173,11 @@ function CheckEmail({
   onConfirm: () => void;
 }) {
   return (
-    <section className="survey-grid border-b border-border bg-paper">
+    <section className="band-soft border-b border-border">
       <div className="mx-auto max-w-2xl px-6 py-28">
-        <div className="border border-border bg-card p-10">
+        <div className="glass rounded-[20px] p-10 shadow-panel">
           <p className="rule-label">Step 2 of 2</p>
-          <h1 className="mt-5 font-serif text-3xl text-primary">Check your email</h1>
+          <h1 className="mt-5 font-heading font-bold text-3xl text-foreground">Check your email</h1>
           <p className="mt-4 text-base leading-relaxed text-muted-foreground">
             We sent a confirmation link to{" "}
             <span className="font-medium text-foreground">{email || "your inbox"}</span>. Open it to
@@ -126,7 +185,7 @@ function CheckEmail({
           </p>
           <button
             onClick={onBack}
-            className="mt-6 text-sm text-primary underline underline-offset-4"
+            className="mt-6 text-sm text-primary-deep underline underline-offset-4"
           >
             Use a different email address
           </button>
@@ -139,7 +198,7 @@ function CheckEmail({
             </p>
             <button
               onClick={onConfirm}
-              className="mt-4 border border-accent px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="mt-4 border border-accent px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-accent-foreground rounded-md"
             >
               Simulate email confirmation
             </button>
@@ -170,14 +229,19 @@ const STEPS = [
 
 function HowItWorks() {
   return (
-    <section className="border-b border-border bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-24">
+    <section className="band-soft">
+      <div className="mx-auto max-w-6xl px-6 py-[88px]">
         <p className="rule-label">How it works</p>
-        <div className="mt-12 grid gap-px border border-border bg-border md:grid-cols-3">
+        <div className="mt-12 grid gap-[22px] md:grid-cols-3">
           {STEPS.map((s) => (
-            <div key={s.n} className="bg-background p-10">
-              <span className="font-mono text-sm text-accent">{s.n}</span>
-              <h2 className="mt-5 font-serif text-2xl text-primary">{s.title}</h2>
+            <div
+              key={s.n}
+              className="glass rounded-2xl p-8 transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-card"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/10 font-heading text-sm font-bold text-accent">
+                {s.n}
+              </span>
+              <h2 className="mt-5 text-2xl text-foreground">{s.title}</h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
             </div>
           ))}
@@ -204,16 +268,16 @@ const AUDIENCES = [
 
 function Audiences() {
   return (
-    <section className="border-b border-border bg-paper">
-      <div className="mx-auto max-w-6xl px-6 py-24">
+    <section className="bg-paper">
+      <div className="mx-auto max-w-6xl px-6 py-[88px]">
         <p className="rule-label">Who this is for</p>
-        <h2 className="mt-6 max-w-2xl font-serif text-3xl text-primary md:text-4xl">
+        <h2 className="mt-5 max-w-2xl text-3xl tracking-[-0.3px] text-foreground md:text-[34px]">
           Built for the people who actually assemble affordable housing capital stacks.
         </h2>
-        <div className="mt-14 grid gap-10 md:grid-cols-3">
+        <div className="mt-12 grid gap-[22px] md:grid-cols-3">
           {AUDIENCES.map((a) => (
-            <div key={a.title} className="border-t-2 border-primary pt-6">
-              <h3 className="font-serif text-xl text-foreground">{a.title}</h3>
+            <div key={a.title} className="rounded-2xl border border-border bg-paper p-[26px]">
+              <h3 className="text-lg text-foreground">{a.title}</h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{a.body}</p>
             </div>
           ))}
@@ -225,8 +289,8 @@ function Audiences() {
 
 function WhyThisExists() {
   return (
-    <section className="border-b border-border bg-background">
-      <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+    <section className="band-soft border-b border-border">
+      <div className="mx-auto grid max-w-6xl gap-12 px-6 py-[88px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         <div>
           <p className="rule-label">Why this exists</p>
         </div>

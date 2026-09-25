@@ -8,13 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { getSource } from "@/lib/citations";
-import {
-  COVERAGE_META,
-  LEVELS,
-  LEVEL_META,
-  type Coverage,
-  type Level,
-} from "@/lib/jurisdictions";
+import { COVERAGE_META, LEVELS, LEVEL_META, type Coverage, type Level } from "@/lib/jurisdictions";
 
 type ScopeValue = { numbers: Map<string, number>; ids: string[] };
 
@@ -32,9 +26,7 @@ export function CitationScope({ ids, children }: { ids: string[]; children: Reac
   for (const id of ids) if (getSource(id) && !unique.includes(id)) unique.push(id);
   const numbers = new Map(unique.map((id, i) => [id, i + 1]));
   return (
-    <CitationContext.Provider value={{ numbers, ids: unique }}>
-      {children}
-    </CitationContext.Provider>
+    <CitationContext.Provider value={{ numbers, ids: unique }}>{children}</CitationContext.Provider>
   );
 }
 
@@ -80,11 +72,11 @@ export function LevelFilterControl({
               onClick={() => onChange(o.key)}
               aria-pressed={active}
               title={o.key === "all" ? "Show every level" : LEVEL_META[o.key as Level].blurb}
-              className={`border px-2 py-1 font-mono text-[11px] tracking-wide transition-colors ${
+              className={`border px-2 py-1 tabular-nums text-[11px] tracking-wide transition-colors ${
                 active
                   ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-              }`}
+                  : "border-border text-muted-foreground hover:border-accent hover:text-accent"
+              } rounded-md`}
             >
               {o.label}
             </button>
@@ -97,7 +89,7 @@ export function LevelFilterControl({
 
 function LevelTag({ level }: { level: Level }) {
   return (
-    <span className="border border-accent px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-accent">
+    <span className="border border-accent px-1.5 py-0.5 tabular-nums text-[10px] uppercase tracking-[0.12em] text-accent rounded-md">
       {LEVEL_META[level].label}
     </span>
   );
@@ -154,12 +146,7 @@ export function Cite({ id }: { id: string }) {
   };
 
   return (
-    <span
-      ref={wrapRef}
-      className="relative inline"
-      onMouseEnter={hold}
-      onMouseLeave={release}
-    >
+    <span ref={wrapRef} className="relative inline" onMouseEnter={hold} onMouseLeave={release}>
       <button
         type="button"
         aria-describedby={open ? popId : undefined}
@@ -171,7 +158,7 @@ export function Cite({ id }: { id: string }) {
         }}
         onFocus={hold}
         onBlur={release}
-        className="cursor-help align-super font-mono text-[0.65em] leading-none text-accent underline decoration-dotted underline-offset-2 hover:text-primary"
+        className="cursor-help align-super tabular-nums text-[0.65em] leading-none text-accent underline decoration-dotted underline-offset-2 hover:text-accent"
       >
         {n}
       </button>
@@ -181,13 +168,13 @@ export function Cite({ id }: { id: string }) {
           role="tooltip"
           onMouseEnter={hold}
           onMouseLeave={release}
-          className={`absolute left-1/2 z-50 block ${below ? "top-full mt-2" : "bottom-full mb-2"}  w-[320px] max-w-[86vw] -translate-x-1/2 border border-primary bg-paper p-4 text-left shadow-[0_4px_0_0_var(--color-primary)]`}
+          className={`absolute left-1/2 z-50 block ${below ? "top-full mt-2" : "bottom-full mb-2"}  w-[320px] max-w-[86vw] -translate-x-1/2 rounded-2xl border border-border bg-paper p-4 text-left shadow-popover rounded-md`}
         >
           <span className="flex items-center justify-between gap-2">
             <span className="rule-label">Reference {n}</span>
             <LevelTag level={source.level} />
           </span>
-          <span className="mt-2 block font-serif text-[13px] leading-relaxed text-foreground">
+          <span className="mt-2 block font-heading font-bold text-[13px] leading-relaxed text-foreground">
             {source.note}
           </span>
           {source.role && (
@@ -206,11 +193,11 @@ export function Cite({ id }: { id: string }) {
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 inline-block border border-primary bg-primary px-2.5 py-1.5 font-mono text-[11px] tracking-wide text-primary-foreground hover:bg-primary-deep"
+            className="mt-3 inline-block border border-primary bg-primary px-2.5 py-1.5 tabular-nums text-[11px] tracking-wide text-primary-foreground hover:bg-primary-hover rounded-md"
           >
             Open source ↗
           </a>
-          <span className="mt-2 block font-mono text-[11px] text-muted-foreground">
+          <span className="mt-2 block tabular-nums text-[11px] text-muted-foreground">
             Accessed {source.accessed}.
           </span>
         </span>
@@ -256,7 +243,7 @@ export function CoverageBar({
       {LEVELS.map((l) => {
         const state = coverage[l];
         const base =
-          "flex h-5 w-5 items-center justify-center font-mono text-[10px] leading-none";
+          "flex h-5 w-5 items-center justify-center tabular-nums text-[10px] leading-none";
         const style =
           state === "loaded"
             ? "border border-primary bg-primary text-primary-foreground"
@@ -283,13 +270,14 @@ export function CoverageLegend({ className = "" }: { className?: string }) {
   return (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 ${className}`}>
       <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span className="h-3 w-3 border border-primary bg-primary" /> Source loaded
+        <span className="h-3 w-3 border border-primary bg-primary rounded-sm" /> Source loaded
       </span>
       <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span className="h-3 w-3 border border-border bg-secondary" /> No requirement at this level
+        <span className="h-3 w-3 border border-border bg-secondary rounded-sm" /> No requirement at
+        this level
       </span>
       <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span className="h-3 w-3 border border-dashed border-accent" /> Not loaded yet
+        <span className="h-3 w-3 border border-dashed border-accent rounded-sm" /> Not loaded yet
       </span>
     </div>
   );
@@ -334,22 +322,24 @@ export function ReferenceList({
         {groups.map((g) => (
           <div key={g.level}>
             <p className="flex items-baseline gap-2 border-b border-border pb-1">
-              <span className="font-serif text-sm text-primary">{LEVEL_META[g.level].label}</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+              <span className="font-heading font-bold text-sm text-foreground">
+                {LEVEL_META[g.level].label}
+              </span>
+              <span className="tabular-nums text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                 {LEVEL_META[g.level].blurb}
               </span>
             </p>
             <ol className="mt-2.5 space-y-2.5">
               {g.entries.map(({ id, n, src }) => (
                 <li key={id} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-1">
-                  <span className="font-mono text-[11px] text-accent">{n}.</span>
+                  <span className="tabular-nums text-[11px] text-accent">{n}.</span>
                   <span className="text-[12px] leading-relaxed text-muted-foreground">
                     {src.note}{" "}
                     <a
                       href={src.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-[11px] text-primary underline underline-offset-2 hover:text-accent"
+                      className="tabular-nums text-[11px] text-primary-deep underline underline-offset-2 hover:text-accent"
                     >
                       Link ↗
                     </a>{" "}

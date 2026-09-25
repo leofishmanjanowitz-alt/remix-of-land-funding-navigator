@@ -24,7 +24,8 @@ export const Route = createFileRoute("/dashboard")({
       { property: "og:title", content: "Saved parcel dashboard — Collective Impact" },
       {
         property: "og:description",
-        content: "Track researched parcels, eligible programs, and open tasks across your pipeline.",
+        content:
+          "Track researched parcels, eligible programs, and open tasks across your pipeline.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -73,7 +74,7 @@ function DashboardPage() {
         <div className="flex flex-wrap items-end justify-between gap-6 border-b border-border pb-8">
           <div>
             <p className="rule-label">Subscriber workspace</p>
-            <h1 className="mt-3 font-serif text-4xl tracking-tight text-primary">
+            <h1 className="mt-3 font-heading font-bold text-4xl tracking-tight text-foreground">
               Saved parcel dashboard
             </h1>
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
@@ -83,13 +84,13 @@ function DashboardPage() {
           </div>
           <button
             onClick={() => setSubscribed((s) => !s)}
-            className="border border-border px-3 py-2 font-mono text-xs tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            className="border border-border px-3 py-2 tabular-nums text-xs tracking-wide text-muted-foreground transition-colors hover:border-accent hover:text-accent rounded-md"
           >
             Prototype shortcut: {subscribed ? "view as non-subscriber" : "simulate subscriber"}
           </button>
         </div>
 
-        <dl className="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-[22px] sm:grid-cols-3">
           <Stat label="Parcels researched" value={String(totals.parcels)} />
           <Stat label="Likely eligible program matches" value={String(totals.programs)} />
           <Stat label="Open tasks across parcels" value={String(totals.tasks)} />
@@ -124,7 +125,7 @@ function DashboardPage() {
               id="sort"
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className="mt-3 h-10 border border-border bg-paper px-3 text-sm text-foreground outline-none focus:border-primary"
+              className="mt-3 h-10 border border-border bg-paper px-3 text-sm text-foreground outline-none focus:border-accent rounded-lg"
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -135,14 +136,14 @@ function DashboardPage() {
           </div>
         </div>
 
-        <p className="mt-6 border-t border-border pt-4 font-mono text-xs text-muted-foreground">
+        <p className="mt-6 border-t border-border pt-4 tabular-nums text-xs text-muted-foreground">
           {rows.length} {rows.length === 1 ? "parcel" : "parcels"}
           {program !== "all" &&
             ` with ${PROGRAM_FILTERS.find((p) => p.id === program)?.label} eligibility`}
         </p>
 
         {rows.length === 0 ? (
-          <p className="mt-10 border border-border bg-paper-deep p-8 text-sm text-muted-foreground">
+          <p className="mt-10 border border-border bg-paper-deep p-8 text-sm text-muted-foreground rounded-lg">
             No researched parcel currently shows eligibility for that program. Clear the filter to
             see the full list.
           </p>
@@ -166,9 +167,9 @@ function DashboardPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-paper px-6 py-6">
+    <div className="glass rounded-2xl p-6">
       <dt className="rule-label">{label}</dt>
-      <dd className="mt-2 font-serif text-3xl text-primary">{value}</dd>
+      <dd className="mt-2 font-heading text-[32px] leading-tight font-bold text-accent">{value}</dd>
     </div>
   );
 }
@@ -189,8 +190,8 @@ function FilterChip({
       className={`border px-3 py-1.5 text-sm transition-colors ${
         active
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-paper text-muted-foreground hover:border-primary hover:text-primary"
-      }`}
+          : "border-border bg-paper text-muted-foreground hover:border-accent hover:text-accent"
+      } rounded-md`}
     >
       {label}
     </button>
@@ -202,27 +203,31 @@ function ParcelCard({ row, locked = false }: { row: ResearchedParcel; locked?: b
 
   return (
     <article
-      className={`flex flex-col border border-border bg-paper ${
-        locked ? "pointer-events-none select-none blur-[3px]" : ""
+      className={`flex flex-col overflow-hidden rounded-2xl border border-border bg-paper transition-[transform,box-shadow] duration-200 ${
+        locked
+          ? "pointer-events-none select-none blur-[3px]"
+          : "hover:-translate-y-1 hover:shadow-card"
       }`}
       aria-hidden={locked}
     >
       <ParcelThumbnail parcel={parcel} muted={locked} />
 
       <div className="flex flex-1 flex-col p-5">
-        <p className="font-mono text-xs text-muted-foreground">Parcel {parcel.parcelId}</p>
-        <h2 className="mt-1 font-serif text-xl leading-snug text-primary">{parcel.address}</h2>
+        <p className="tabular-nums text-xs text-muted-foreground">Parcel {parcel.parcelId}</p>
+        <h2 className="mt-1 font-heading font-bold text-xl leading-snug text-foreground">
+          {parcel.address}
+        </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           {parcel.zoning} · {parcel.acreage} acres · {currency.format(parcel.assessedValue)}
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-px border border-border bg-border">
-          <div className="bg-paper-deep px-3 py-2.5">
-            <p className="font-serif text-2xl text-primary">{row.eligibleCount}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-paper-deep px-3 py-2.5">
+            <p className="font-heading font-bold text-2xl text-foreground">{row.eligibleCount}</p>
             <p className="rule-label mt-0.5">Eligible programs</p>
           </div>
-          <div className="bg-paper-deep px-3 py-2.5">
-            <p className="font-serif text-2xl text-accent">{row.openTasks}</p>
+          <div className="rounded-lg bg-paper-deep px-3 py-2.5">
+            <p className="font-heading font-bold text-2xl text-accent">{row.openTasks}</p>
             <p className="rule-label mt-0.5">Open tasks</p>
           </div>
         </div>
@@ -236,7 +241,7 @@ function ParcelCard({ row, locked = false }: { row: ResearchedParcel; locked?: b
 
         <p className="mt-3 text-sm leading-relaxed text-foreground">{row.note}</p>
 
-        <p className="mt-4 font-mono text-xs text-muted-foreground">
+        <p className="mt-4 tabular-nums text-xs text-muted-foreground">
           Last reviewed {formatReviewed(row.lastReviewed)}
         </p>
 
@@ -245,7 +250,7 @@ function ParcelCard({ row, locked = false }: { row: ResearchedParcel; locked?: b
             to="/map"
             search={{ parcel: parcel.id, report: true }}
             tabIndex={locked ? -1 : undefined}
-            className="flex-1 bg-primary px-4 py-2.5 text-center text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-deep"
+            className="flex-1 bg-primary px-4 py-2.5 text-center text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover rounded-md"
           >
             Open report
           </Link>
@@ -253,7 +258,7 @@ function ParcelCard({ row, locked = false }: { row: ResearchedParcel; locked?: b
             to="/map"
             search={{ parcel: parcel.id }}
             tabIndex={locked ? -1 : undefined}
-            className="border border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            className="border border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent rounded-md"
           >
             View on map
           </Link>
@@ -265,41 +270,43 @@ function ParcelCard({ row, locked = false }: { row: ResearchedParcel; locked?: b
 
 function SubscriberGate({ lockedCount }: { lockedCount: number }) {
   return (
-    <section className="mt-10 border border-primary bg-paper-deep p-8">
+    <section className="mt-10 border border-border bg-paper-deep p-8 rounded-2xl">
       <p className="rule-label">Subscriber only</p>
-      <h2 className="mt-3 font-serif text-2xl text-primary">
-        {lockedCount} more researched {lockedCount === 1 ? "parcel is" : "parcels are"} saved to this
-        workspace
+      <h2 className="mt-3 font-heading font-bold text-2xl text-foreground">
+        {lockedCount} more researched {lockedCount === 1 ? "parcel is" : "parcels are"} saved to
+        this workspace
       </h2>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        The dashboard keeps every parcel you have looked at, so a funding read done in March is still
-        there in October — with its citations, its tasks, and its report. A subscription unlocks the
-        full list, unlimited reports, and unlimited chat questions.
+        The dashboard keeps every parcel you have looked at, so a funding read done in March is
+        still there in October — with its citations, its tasks, and its report. A subscription
+        unlocks the full list, unlimited reports, and unlimited chat questions.
       </p>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="border border-primary bg-paper p-6">
+        <div className="border border-border shadow-panel bg-paper p-6 rounded-2xl">
           <p className="rule-label">Recommended</p>
-          <h3 className="mt-2 font-serif text-xl text-primary">Monthly subscription</h3>
-          <p className="mt-2 font-mono text-sm text-accent">[ pricing to be confirmed ]</p>
+          <h3 className="mt-2 font-heading font-bold text-xl text-foreground">
+            Monthly subscription
+          </h3>
+          <p className="mt-2 tabular-nums text-sm text-accent">[ pricing to be confirmed ]</p>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             <li>Unlimited parcel reports</li>
             <li>Saved parcel dashboard with tasks and history</li>
             <li>Unlimited chat questions with citations</li>
           </ul>
-          <button className="mt-6 w-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-deep">
+          <button className="mt-6 w-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover rounded-md">
             Start subscription
           </button>
         </div>
-        <div className="border border-border bg-paper p-6">
-          <h3 className="font-serif text-xl text-primary">One-time report</h3>
-          <p className="mt-2 font-mono text-sm text-accent">[ pricing to be confirmed ]</p>
+        <div className="border border-border bg-paper p-6 rounded-2xl">
+          <h3 className="font-heading font-bold text-xl text-foreground">One-time report</h3>
+          <p className="mt-2 tabular-nums text-sm text-accent">[ pricing to be confirmed ]</p>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             <li>Single parcel, downloadable PDF</li>
             <li>Full funding rationale and citations</li>
             <li>No dashboard or saved history</li>
           </ul>
-          <button className="mt-6 w-full border border-primary px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
+          <button className="mt-6 w-full border border-accent px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-primary hover:text-primary-foreground rounded-md">
             Buy a single report
           </button>
         </div>

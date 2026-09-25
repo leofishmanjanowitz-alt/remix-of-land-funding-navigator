@@ -7,13 +7,7 @@ import {
 } from "@/lib/cost-savers";
 import type { Parcel } from "@/lib/tulsa-map-data";
 
-export function CostSavers({
-  parcel,
-  className = "",
-}: {
-  parcel: Parcel;
-  className?: string;
-}) {
+export function CostSavers({ parcel, className = "" }: { parcel: Parcel; className?: string }) {
   const matches = catalogMatches(parcel.zoning);
   const reviewOverlays = designReviewOverlays(parcel);
 
@@ -56,7 +50,7 @@ function ResourceRow({
           </p>
           <p className="text-xs text-muted-foreground">{resource.administrator}</p>
         </div>
-        <span className="shrink-0 border border-accent px-2 py-0.5 text-[11px] leading-tight text-accent">
+        <span className="shrink-0 border border-accent px-2 py-0.5 text-[11px] leading-tight text-accent rounded-md">
           Non-capital
         </span>
       </div>
@@ -82,7 +76,7 @@ function ResourceRow({
           <ul className="mt-2 space-y-1">
             {matches.map((m) => (
               <li key={m.type} className="flex gap-2 text-sm text-foreground">
-                <span className={m.basis === "permitted" ? "text-primary" : "text-accent"}>
+                <span className={m.basis === "permitted" ? "text-primary-deep" : "text-accent"}>
                   {m.basis === "permitted" ? "▪" : "▫"}
                 </span>
                 <span>
@@ -107,8 +101,8 @@ function ResourceRow({
 
       {matches.length === 0 && resource.id === "ttown-catalog" && (
         <p className="mt-3 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
-          No catalog building type is permitted or conditionally allowed under this parcel's
-          zoning, so the catalog is unlikely to help here without a rezoning.
+          No catalog building type is permitted or conditionally allowed under this parcel's zoning,
+          so the catalog is unlikely to help here without a rezoning.
         </p>
       )}
 
@@ -117,12 +111,12 @@ function ResourceRow({
           href={resource.url}
           target="_blank"
           rel="noreferrer"
-          className="border-b border-primary font-mono text-xs text-primary hover:border-accent hover:text-accent"
+          className="border-b border-border tabular-nums text-xs text-primary-deep hover:border-accent hover:text-accent"
         >
           Open source ↗
         </a>
         {resource.unverified && (
-          <span className="font-mono text-[11px] text-accent">Unverified — confirm details</span>
+          <span className="tabular-nums text-[11px] text-accent">Unverified — confirm details</span>
         )}
       </div>
     </li>

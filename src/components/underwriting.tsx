@@ -36,9 +36,7 @@ export function UnderwritingLimits({
   className?: string;
 }) {
   const selectable = programs.filter((p) => PROGRAM_LIMITS[p.id]);
-  const [selected, setSelected] = useState<string[]>(() =>
-    selectable.slice(0, 2).map((p) => p.id),
-  );
+  const [selected, setSelected] = useState<string[]>(() => selectable.slice(0, 2).map((p) => p.id));
   const active = selected.filter((id) => selectable.some((p) => p.id === id));
   const binding = bindingLimit(active);
   const bindingBand = binding.band;
@@ -57,7 +55,7 @@ export function UnderwritingLimits({
       </p>
 
       {/* --------------------------- program overlay --------------------------- */}
-      <div className="mt-5 border border-primary bg-secondary p-4">
+      <div className="mt-5 border border-accent/20 bg-accent/5 p-4 rounded-2xl">
         <p className="rule-label">Which limits bind for your stack</p>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {selectable.map((p) => {
@@ -70,8 +68,8 @@ export function UnderwritingLimits({
                 className={`border px-2 py-1 text-[11px] leading-tight transition-colors ${
                   on
                     ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-                }`}
+                    : "border-border text-muted-foreground hover:border-accent hover:text-accent"
+                } rounded-md`}
               >
                 {p.name}
               </button>
@@ -81,7 +79,7 @@ export function UnderwritingLimits({
 
         <p className="mt-3 text-sm leading-relaxed text-foreground">{binding.note}</p>
         {bindingBand && (
-          <p className="mt-2 font-mono text-sm text-primary">
+          <p className="mt-2 tabular-nums text-sm text-primary-deep">
             Binding income limit: {BAND_LABEL[bindingBand]} —{" "}
             {binding.drivenBy.map(nameOf).join(", ")}
           </p>
@@ -190,10 +188,7 @@ export function UnderwritingLimits({
           return {
             key: u,
             label: UNIT_LABEL[u],
-            cells: [
-              money.format(UTILITY_ALLOWANCE[u]),
-              money.format(gross - UTILITY_ALLOWANCE[u]),
-            ],
+            cells: [money.format(UTILITY_ALLOWANCE[u]), money.format(gross - UTILITY_ALLOWANCE[u])],
           };
         })}
       >
@@ -223,23 +218,25 @@ function LimitTable({
   children?: React.ReactNode;
 }) {
   return (
-    <section className="mt-6 border border-border bg-paper p-4">
+    <section className="mt-6 border border-border bg-paper p-4 rounded-2xl">
       <h4 className="text-sm font-medium text-foreground">
         {title}
         <Cite id={citeId} />
       </h4>
-      <p className="mt-1 font-mono text-[11px] uppercase tracking-wide text-accent">{effective}</p>
+      <p className="mt-1 tabular-nums text-[11px] uppercase tracking-wide text-accent">
+        {effective}
+      </p>
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-primary">
+            <tr className="border-b border-border">
               <th className="rule-label py-1.5 text-left">{firstColumn}</th>
               {columns.map((c, i) => (
                 <th
                   key={c}
                   className={`rule-label py-1.5 text-right ${
-                    i === highlightColumn ? "text-primary" : ""
+                    i === highlightColumn ? "text-primary-deep" : ""
                   }`}
                 >
                   {c}
@@ -255,8 +252,8 @@ function LimitTable({
                 {r.cells.map((cell, i) => (
                   <td
                     key={i}
-                    className={`py-1.5 text-right font-mono text-[13px] ${
-                      i === highlightColumn ? "bg-secondary text-primary" : "text-foreground"
+                    className={`py-1.5 text-right tabular-nums text-[13px] ${
+                      i === highlightColumn ? "bg-secondary text-primary-deep" : "text-foreground"
                     }`}
                   >
                     {cell}

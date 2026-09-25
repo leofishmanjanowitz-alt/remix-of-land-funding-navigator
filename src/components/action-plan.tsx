@@ -47,7 +47,8 @@ export function ProgramSelector({
                   <p className="text-sm font-medium text-foreground">{p.name}</p>
                   <p className="text-xs text-muted-foreground">{p.agency}</p>
                   <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {BEST_FOR[p.id] ?? "Fit depends on the project; open the plan to see the terms."}
+                    {BEST_FOR[p.id] ??
+                      "Fit depends on the project; open the plan to see the terms."}
                   </p>
                 </div>
               </div>
@@ -59,13 +60,13 @@ export function ProgramSelector({
                     isChosen
                       ? "border-primary bg-primary text-primary-foreground"
                       : hasPlan
-                        ? "border-primary text-primary hover:bg-secondary"
+                        ? "border-accent text-accent hover:bg-secondary"
                         : "border-border text-muted-foreground hover:border-accent hover:text-accent"
-                  }`}
+                  } rounded-md`}
                 >
                   {isChosen ? "Selected" : hasPlan ? "Get this plan free" : "Preview this plan"}
                 </button>
-                <span className="font-mono text-[11px] text-muted-foreground">
+                <span className="tabular-nums text-[11px] text-muted-foreground">
                   {hasPlan ? "Full plan ready" : "Plan available with a subscription"}
                 </span>
               </div>
@@ -92,21 +93,23 @@ export function ActionPlanView({
 }) {
   return (
     <div className={className}>
-      <div className="flex items-start justify-between gap-3 border-b border-primary pb-3">
+      <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
         <div>
           <p className="rule-label">Your free action plan</p>
-          <h4 className="mt-1 font-serif text-xl leading-snug text-primary">{plan.programName}</h4>
+          <h4 className="mt-1 font-heading font-bold text-xl leading-snug text-foreground">
+            {plan.programName}
+          </h4>
         </div>
         <button
           onClick={onChangeProgram}
-          className="shrink-0 border border-border px-2.5 py-1 font-mono text-[11px] text-muted-foreground hover:border-primary hover:text-primary"
+          className="shrink-0 border border-border px-2.5 py-1 tabular-nums text-[11px] text-muted-foreground hover:border-accent hover:text-accent rounded-md"
         >
           Change program
         </button>
       </div>
 
       {plan.unverified && (
-        <p className="mt-3 border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent">
+        <p className="mt-3 border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent rounded-lg">
           {plan.unverified}
         </p>
       )}
@@ -128,11 +131,9 @@ export function ActionPlanView({
             return (
               <li key={c.body + c.person}>
                 {record ? (
-                  <ContactBlock contact={record}>
-                    {c.method}
-                  </ContactBlock>
+                  <ContactBlock contact={record}>{c.method}</ContactBlock>
                 ) : (
-                  <div className="border border-border bg-card px-3 py-2">
+                  <div className="border border-border bg-card px-3 py-2 rounded-lg">
                     <p className="text-sm font-medium text-foreground">{c.person}</p>
                     <p className="text-xs text-muted-foreground">
                       {c.body} · {c.role}
@@ -155,7 +156,7 @@ export function ActionPlanView({
                       contact: c.body,
                     })
                   }
-                  className="mt-2 border border-primary px-2.5 py-1 text-xs text-primary hover:bg-secondary"
+                  className="mt-2 border border-accent px-2.5 py-1 text-xs text-accent hover:bg-secondary rounded-md"
                 >
                   Add to task list
                 </button>
@@ -185,7 +186,7 @@ export function ActionPlanView({
           {plan.steps.map((s) => (
             <li key={s.order} className="border-b border-border py-4">
               <div className="flex gap-3">
-                <span className="font-mono text-xs text-accent">
+                <span className="tabular-nums text-xs text-accent">
                   {String(s.order).padStart(2, "0")}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -194,14 +195,16 @@ export function ActionPlanView({
                     <CiteStack ids={s.sourceIds} />
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.detail}</p>
-                  <p className="mt-1 font-mono text-[11px] text-muted-foreground">{s.duration}</p>
+                  <p className="mt-1 tabular-nums text-[11px] text-muted-foreground">
+                    {s.duration}
+                  </p>
                   <button
                     onClick={() =>
                       onAddTask(
                         s.contact ? { title: s.title, contact: s.contact } : { title: s.title },
                       )
                     }
-                    className="mt-2 border border-primary px-2.5 py-1 text-xs text-primary hover:bg-secondary"
+                    className="mt-2 border border-accent px-2.5 py-1 text-xs text-accent hover:bg-secondary rounded-md"
                   >
                     Add to task list
                   </button>
@@ -216,7 +219,7 @@ export function ActionPlanView({
         <dl className="border-t border-border">
           {plan.dates.map((d) => (
             <div key={d.label} className="border-b border-border py-3">
-              <dt className="font-mono text-xs text-accent">{d.date}</dt>
+              <dt className="tabular-nums text-xs text-accent">{d.date}</dt>
               <dd className="mt-1">
                 <p className="text-sm font-medium text-foreground">
                   {d.label}
@@ -229,9 +232,13 @@ export function ActionPlanView({
                 </p>
                 <button
                   onClick={() =>
-                    onAddTask({ title: d.label, dueDate: d.date, contact: plan.administeredLocallyBy })
+                    onAddTask({
+                      title: d.label,
+                      dueDate: d.date,
+                      contact: plan.administeredLocallyBy,
+                    })
                   }
-                  className="mt-2 border border-accent px-2.5 py-1 text-xs text-accent hover:bg-secondary"
+                  className="mt-2 border border-accent px-2.5 py-1 text-xs text-accent hover:bg-secondary rounded-md"
                 >
                   Add reminder
                 </button>
@@ -256,7 +263,7 @@ export function ActionPlanView({
             <ul className="mt-2 space-y-1.5">
               {plan.covers.map((c) => (
                 <li key={c} className="flex gap-2 text-sm text-foreground">
-                  <span className="text-primary">▪</span>
+                  <span className="text-primary-deep">▪</span>
                   {c}
                 </li>
               ))}
@@ -307,23 +314,26 @@ export function ActionPlanView({
             {plan.directory.entries.map((d) => (
               <li key={d.name} className="border-b border-border py-3">
                 <p className="text-sm font-medium text-foreground">{d.name}</p>
-                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                <p className="mt-0.5 tabular-nums text-[11px] text-muted-foreground">
                   {d.serviceArea}
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{d.focus}</p>
                 <p className="mt-1 text-sm leading-relaxed text-foreground">{d.note}</p>
                 <button
                   onClick={() =>
-                    onAddTask({ title: `Contact ${d.name} about a CHDO partnership`, contact: d.name })
+                    onAddTask({
+                      title: `Contact ${d.name} about a CHDO partnership`,
+                      contact: d.name,
+                    })
                   }
-                  className="mt-2 border border-primary px-2.5 py-1 text-xs text-primary hover:bg-secondary"
+                  className="mt-2 border border-accent px-2.5 py-1 text-xs text-accent hover:bg-secondary rounded-md"
                 >
                   Add to task list
                 </button>
               </li>
             ))}
           </ul>
-          <p className="mt-3 border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent">
+          <p className="mt-3 border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent rounded-lg">
             {plan.directory.caveat}
           </p>
         </Block>
@@ -362,9 +372,9 @@ export function LockedPlan({
   className?: string;
 }) {
   return (
-    <div className={`border-2 border-primary bg-secondary p-5 ${className}`}>
+    <div className={`border border-accent/20 bg-accent/5 p-5 ${className} rounded-2xl`}>
       <p className="rule-label">Included with a subscription</p>
-      <h4 className="mt-1 font-serif text-xl leading-snug text-primary">
+      <h4 className="mt-1 font-heading font-bold text-xl leading-snug text-foreground">
         Action plan — {programName}
       </h4>
       <p className="mt-2 text-sm leading-relaxed text-foreground">
@@ -375,13 +385,13 @@ export function LockedPlan({
       <div className="mt-4 flex flex-wrap gap-3">
         <button
           onClick={onUpgrade}
-          className="border border-primary bg-primary px-4 py-2 text-sm tracking-wide text-primary-foreground hover:bg-primary-deep"
+          className="border border-primary bg-primary px-4 py-2 text-sm tracking-wide text-primary-foreground hover:bg-primary-hover rounded-md"
         >
           See subscription
         </button>
         <button
           onClick={onChangeProgram}
-          className="border border-primary px-4 py-2 text-sm text-primary hover:bg-paper"
+          className="border border-accent px-4 py-2 text-sm text-accent hover:bg-paper rounded-md"
         >
           Pick a different program
         </button>
@@ -405,25 +415,25 @@ export function PlanUpgradeCard({
   className?: string;
 }) {
   return (
-    <div className={`border border-border bg-paper-deep p-4 ${className}`}>
+    <div className={`border border-border bg-paper-deep p-4 ${className} rounded-2xl`}>
       <p className="rule-label">What a subscription adds</p>
       <ul className="mt-2 space-y-1.5 text-sm text-foreground">
         <li className="flex gap-2">
-          <span className="text-primary">▪</span> Action plans for the other {remaining}{" "}
+          <span className="text-primary-deep">▪</span> Action plans for the other {remaining}{" "}
           {remaining === 1 ? "program" : "programs"} on this parcel
         </li>
         <li className="flex gap-2">
-          <span className="text-primary">▪</span> Stacking analysis — how these programs combine,
-          and where they conflict
+          <span className="text-primary-deep">▪</span> Stacking analysis — how these programs
+          combine, and where they conflict
         </li>
         <li className="flex gap-2">
-          <span className="text-primary">▪</span> Saved parcel dashboard across every site you
+          <span className="text-primary-deep">▪</span> Saved parcel dashboard across every site you
           research
         </li>
       </ul>
       <button
         onClick={onUpgrade}
-        className="mt-3 w-full border border-primary bg-primary px-4 py-2.5 text-sm tracking-wide text-primary-foreground hover:bg-primary-deep"
+        className="mt-3 w-full border border-primary bg-primary px-4 py-2.5 text-sm tracking-wide text-primary-foreground hover:bg-primary-hover rounded-md"
       >
         See subscription
       </button>

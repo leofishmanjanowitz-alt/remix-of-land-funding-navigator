@@ -51,7 +51,7 @@ function KpiPage() {
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-6 py-14">
         <p className="rule-label">Internal measurement</p>
-        <h1 className="mt-2 font-serif text-3xl leading-tight text-primary">
+        <h1 className="mt-2 font-heading font-bold text-3xl leading-tight text-foreground">
           Assistance demand review
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
@@ -61,9 +61,17 @@ function KpiPage() {
           which kind of help dominates.
         </p>
 
-        <dl className="mt-8 grid gap-px border border-border bg-border sm:grid-cols-3">
-          <Stat label="Share of sessions requesting help" value={pct(kpi.requestRate)} note={`${kpi.uniqueUsers} of ${kpi.sessions} sessions`} />
-          <Stat label="Requests recorded" value={String(kpi.total)} note="All time, this prototype" />
+        <dl className="mt-8 grid gap-[22px] sm:grid-cols-3">
+          <Stat
+            label="Share of sessions requesting help"
+            value={pct(kpi.requestRate)}
+            note={`${kpi.uniqueUsers} of ${kpi.sessions} sessions`}
+          />
+          <Stat
+            label="Requests recorded"
+            value={String(kpi.total)}
+            note="All time, this prototype"
+          />
           <Stat
             label="Leading assistance type"
             value={kpi.byType[0]?.label ?? "—"}
@@ -72,13 +80,13 @@ function KpiPage() {
         </dl>
 
         <section className="mt-12">
-          <h2 className="rule-label border-b border-primary pb-2">Requests by program</h2>
+          <h2 className="rule-label border-b border-border pb-2">Requests by program</h2>
           <ul className="mt-4">
             {kpi.byProgram.map((p) => (
               <li key={p.programId} className="border-b border-border py-3">
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-sm text-foreground">{p.programName}</span>
-                  <span className="font-mono text-sm text-primary">{p.count}</span>
+                  <span className="tabular-nums text-sm text-primary-deep">{p.count}</span>
                 </div>
                 <div className="mt-2 h-1.5 bg-secondary">
                   <div
@@ -92,13 +100,13 @@ function KpiPage() {
         </section>
 
         <section className="mt-12">
-          <h2 className="rule-label border-b border-primary pb-2">Requests by assistance type</h2>
+          <h2 className="rule-label border-b border-border pb-2">Requests by assistance type</h2>
           <ul className="mt-4">
             {kpi.byType.map((t) => (
               <li key={t.type} className="border-b border-border py-3">
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-sm text-foreground">{t.label}</span>
-                  <span className="font-mono text-sm text-primary">{t.count}</span>
+                  <span className="tabular-nums text-sm text-primary-deep">{t.count}</span>
                 </div>
                 <div className="mt-2 h-1.5 bg-secondary">
                   <div
@@ -112,7 +120,7 @@ function KpiPage() {
         </section>
 
         <section className="mt-12">
-          <h2 className="rule-label border-b border-primary pb-2">Most recent requests</h2>
+          <h2 className="rule-label border-b border-border pb-2">Most recent requests</h2>
           <table className="mt-4 w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-border">
@@ -125,7 +133,7 @@ function KpiPage() {
             <tbody>
               {kpi.recent.map((r) => (
                 <tr key={r.id} className="border-b border-border align-top">
-                  <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground">
+                  <td className="py-2.5 pr-3 tabular-nums text-xs text-muted-foreground">
                     {formatRequestedAt(r.at)}
                   </td>
                   <td className="py-2.5 pr-3 text-sm text-foreground">{r.programName}</td>
@@ -135,7 +143,7 @@ function KpiPage() {
                   <td className="py-2.5 text-sm text-muted-foreground">
                     {r.parcelAddress ?? "—"}
                     {r.source === "session" && (
-                      <span className="ml-2 border border-accent px-1.5 py-0.5 font-mono text-[10px] text-accent">
+                      <span className="ml-2 border border-accent px-1.5 py-0.5 tabular-nums text-[10px] text-accent rounded-md">
                         this session
                       </span>
                     )}
@@ -158,10 +166,10 @@ function KpiPage() {
 
 function Stat({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className="bg-paper px-5 py-4">
+    <div className="glass rounded-2xl px-6 py-5">
       <dt className="rule-label">{label}</dt>
-      <dd className="mt-2 font-serif text-2xl leading-tight text-primary">{value}</dd>
-      <p className="mt-1 font-mono text-[11px] text-muted-foreground">{note}</p>
+      <dd className="mt-2 font-heading text-2xl leading-tight font-bold text-accent">{value}</dd>
+      <p className="mt-1 tabular-nums text-[11px] text-muted-foreground">{note}</p>
     </div>
   );
 }

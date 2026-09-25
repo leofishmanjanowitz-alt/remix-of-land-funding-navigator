@@ -14,14 +14,14 @@ import type { Program } from "@/lib/tulsa-map-data";
 
 const tierClass: Record<Tier, string> = {
   1: "border-primary bg-primary text-primary-foreground",
-  2: "border-primary text-primary",
+  2: "border-accent text-accent",
   3: "border-border text-muted-foreground",
 };
 
 export function TierBadge({ tier, className = "" }: { tier: Tier; className?: string }) {
   return (
     <span
-      className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${tierClass[tier]} ${className}`}
+      className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${tierClass[tier]} ${className} rounded-md`}
     >
       Tier {tier} — {TIERS[tier].label}
     </span>
@@ -30,10 +30,12 @@ export function TierBadge({ tier, className = "" }: { tier: Tier; className?: st
 
 export function TierHeading({ tier, count }: { tier: Tier; count: number }) {
   return (
-    <div className="border-t-2 border-primary pt-3 pb-2">
+    <div className="border-t border-border pt-3 pb-2">
       <div className="flex items-baseline justify-between gap-3">
-        <h4 className="font-serif text-lg leading-snug text-primary">{TIERS[tier].label}</h4>
-        <span className="font-mono text-xs text-muted-foreground">
+        <h4 className="font-heading font-bold text-lg leading-snug text-foreground">
+          {TIERS[tier].label}
+        </h4>
+        <span className="tabular-nums text-xs text-muted-foreground">
           {count} {count === 1 ? "source" : "sources"}
         </span>
       </div>
@@ -105,7 +107,7 @@ export function WhyNotTierOne({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="font-mono text-xs text-muted-foreground underline underline-offset-4 hover:text-primary"
+        className="tabular-nums text-xs text-muted-foreground underline underline-offset-4 hover:text-accent"
       >
         {open ? "Hide the assessment" : "Why is this not tier one?"}
       </button>
@@ -116,13 +118,15 @@ export function WhyNotTierOne({
               <dt className="rule-label pt-0.5">
                 {DIMENSION_LABEL[r.dimension]}
                 {r.constraining && (
-                  <span className="mt-1 block font-mono text-[10px] normal-case text-accent">
+                  <span className="mt-1 block tabular-nums text-[10px] normal-case text-accent">
                     constraint
                   </span>
                 )}
               </dt>
               <dd className="text-sm leading-relaxed text-foreground">
-                <span className={r.constraining ? "text-accent" : "text-foreground"}>{r.value}</span>
+                <span className={r.constraining ? "text-accent" : "text-foreground"}>
+                  {r.value}
+                </span>
                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                   {r.detail}
                 </span>
@@ -146,12 +150,12 @@ export function AssumedOrgNote({
     <p
       className={`border border-dashed border-accent px-3 py-2 text-xs leading-relaxed ${
         org ? "text-muted-foreground" : "text-accent"
-      } ${className}`}
+      } ${className} rounded-lg`}
     >
       {org ? (
         <>
-          Tiering is assessed against your organization type:{" "}
-          {ORG_TYPE_LABEL[org].toLowerCase()}. Change it above and the tiers re-sort.
+          Tiering is assessed against your organization type: {ORG_TYPE_LABEL[org].toLowerCase()}.
+          Change it above and the tiers re-sort.
         </>
       ) : (
         <>
@@ -175,7 +179,7 @@ export function RelationshipSources({ className = "" }: { className?: string }) 
               <p className="text-sm font-medium leading-snug text-foreground">{s.name}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{s.agency}</p>
             </div>
-            <span className="shrink-0 border border-border px-2 py-0.5 text-[11px] leading-tight text-muted-foreground">
+            <span className="shrink-0 border border-border px-2 py-0.5 text-[11px] leading-tight text-muted-foreground rounded-md">
               {ACCESS_MODELS[s.model].label}
             </span>
           </div>
@@ -222,7 +226,7 @@ export function WhereToFocus({
           {ordered.map(({ item, assessment }, i) => (
             <li key={item.id} className="border-b border-border py-3 last:border-b-0">
               <div className="flex items-start gap-3">
-                <span className="mt-0.5 font-mono text-xs text-accent">{i + 1}.</span>
+                <span className="mt-0.5 tabular-nums text-xs text-accent">{i + 1}.</span>
                 <div>
                   <p className="text-sm font-medium leading-snug text-foreground">{item.name}</p>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">

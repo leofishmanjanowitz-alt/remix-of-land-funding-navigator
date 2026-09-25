@@ -17,9 +17,9 @@ export function DisbursementBadge({
   return (
     <span
       title={d.summary}
-      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11px] leading-tight tracking-wide ${d.badgeClass} ${className}`}
+      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11px] leading-tight tracking-wide ${d.badgeClass} ${className} rounded-md`}
     >
-      <span aria-hidden className="font-mono text-[10px]">
+      <span aria-hidden className="tabular-nums text-[10px]">
         {d.glyph}
       </span>
       {d.label}
@@ -57,15 +57,16 @@ export function CashFlowSummary({
     items: programs.filter((p) => DISBURSEMENTS[p.disbursement].group === g),
   })).filter((row) => row.items.length > 0);
 
-  const reimbursed = programs.filter(
-    (p) => DISBURSEMENTS[p.disbursement].group === "reimbursed",
-  );
+  const reimbursed = programs.filter((p) => DISBURSEMENTS[p.disbursement].group === "reimbursed");
 
   return (
     <div className={className}>
       <dl className="border-t border-border">
         {byGroup.map(({ group, items }) => (
-          <div key={group} className="grid gap-2 border-b border-border py-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
+          <div
+            key={group}
+            className="grid gap-2 border-b border-border py-4 sm:grid-cols-[11rem_minmax(0,1fr)]"
+          >
             <dt>
               <p className="rule-label">{CASH_FLOW_GROUPS[group as CashFlowGroup].label}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -90,7 +91,9 @@ export function CashFlowSummary({
         {reimbursed.length
           ? `Reimbursement sources (${reimbursed
               .map((p) => p.name)
-              .join(", ")}) pay nothing at closing. You must carry those costs yourself — through equity, a bridge loan, or a construction line — and wait out the draw review before the money comes back. Size your working capital for the largest gap, not the average one.`
+              .join(
+                ", ",
+              )}) pay nothing at closing. You must carry those costs yourself — through equity, a bridge loan, or a construction line — and wait out the draw review before the money comes back. Size your working capital for the largest gap, not the average one.`
           : "No reimbursement sources are in this stack, so you are not carrying costs waiting on draw reviews. Confirm each commitment letter before assuming funds arrive at closing."}
       </p>
     </div>
