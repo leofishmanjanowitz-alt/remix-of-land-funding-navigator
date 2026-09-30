@@ -127,6 +127,9 @@ export function BaseMap({
   useEffect(() => {
     const host = hostRef.current;
     if (!host || mapRef.current) return;
+    // The stores never change identity; hold them so cleanup does not read a moved ref.
+    const geoStore = geoRef.current;
+    const overlayStore = overlayRef.current;
 
     const map = L.map(host, {
       zoomControl: false,
@@ -178,13 +181,13 @@ export function BaseMap({
       window.removeEventListener("resize", resize);
       map.remove();
       mapRef.current = null;
-      geoRef.current.clear();
+      geoStore.clear();
       femaRef.current = null;
       selectedRef.current = null;
       candidateRef.current = null;
       outlineRef.current = null;
       outlineCanvasRef.current = null;
-      overlayRef.current.clear();
+      overlayStore.clear();
     };
   }, []);
 
