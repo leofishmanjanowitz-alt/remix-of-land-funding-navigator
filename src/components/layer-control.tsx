@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LayerSwatch } from "@/components/layer-swatch";
 import { formatDate } from "@/lib/overlay-text";
 import {
@@ -109,7 +109,11 @@ export function LayerControl({
   status: Partial<Record<string, GisStatus>>;
   className?: string;
 }) {
+  // Open on wide screens; on a phone the panel would cover the map, so it starts collapsed.
   const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setOpen(false);
+  }, []);
   const sources = useSources();
   const byKey = new Map((sources.data ?? []).map((s) => [s.sourceKey, s]));
   const on = Object.values(layers).filter(Boolean).length;
