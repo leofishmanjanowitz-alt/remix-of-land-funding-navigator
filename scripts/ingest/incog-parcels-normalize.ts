@@ -54,7 +54,7 @@ export async function normalizeIncogParcels({ url, info, transaction, replaceCur
              pull_id, source_key, source_record_id,
              parcel_number, account_number, parcel_type,
              situs_address, search_address, house_number, street_predir, street_name, street_type, street_postdir,
-             city, zip, owner_name, legal_description, land_use,
+             city, zip, legal_description, land_use,
              acres, year_built, assessed_total, land_value, improvement_value,
              geom, label_point, raw)
            SELECT
@@ -75,7 +75,6 @@ export async function normalizeIncogParcels({ url, info, transaction, replaceCur
              ps.situs, ps.situs, ps.house_number, ps.predir, ps.street_name, ps.street_type, ps.postdir,
              NULLIF(btrim(a ->> 'PropertyCity'), ''),
              NULLIF(left(regexp_replace(COALESCE(a ->> 'PropertyZIP', ''), '\\D', '', 'g'), 5), ''),
-             NULLIF(btrim(a ->> 'Owner'), ''),
              NULLIF(btrim(a ->> 'Legal'), ''),
              COALESCE(NULLIF(btrim(a ->> 'UseCode'), ''), NULLIF(btrim(a ->> 'LEADescription'), '')),
              ${num("GrossAcre")},

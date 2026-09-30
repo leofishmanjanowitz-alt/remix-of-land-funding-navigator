@@ -1,6 +1,7 @@
 /**
- * City of Tulsa city limits and council districts -> jurisdictions.
+ * City of Tulsa council districts -> jurisdictions (kind 'council_district').
  * Source: City of Tulsa GIS open data (ArcGIS Online, org XkZ90iCdbTJ9oNXl).
+ * Municipal boundaries come from INCOG; see municipalities.ts.
  */
 import {
   clearStaging,
@@ -24,7 +25,7 @@ type Source = {
   sourceKey: string;
   datasetName: string;
   url: string;
-  kind: "city_limits" | "council_district";
+  kind: "council_district";
   /** SQL expressions over staging attrs `a`. */
   code: string;
   name: string;
@@ -32,15 +33,6 @@ type Source = {
 };
 
 const SOURCES: Source[] = [
-  {
-    sourceKey: "tulsa_city_limits",
-    datasetName: "Tulsa City Limits",
-    url: `${BASE}/TulsaCityLimits/FeatureServer/0`,
-    kind: "city_limits",
-    code: "COALESCE(NULLIF(a ->> 'FULLFIPS', ''), 'tulsa')",
-    name: "COALESCE(NULLIF(a ->> 'NAME', ''), 'City of Tulsa')",
-    detail: "NULL",
-  },
   {
     sourceKey: "tulsa_council_districts",
     datasetName: "Tulsa City Council Districts",

@@ -95,7 +95,7 @@ async function stage(
       async (pullId) => {
         const res = await client.query(
           `INSERT INTO overlay_qct (pull_id, geoid, name, vintage, geom)
-           SELECT $1, attrs ->> 'GEOID', 'Census Tract ' || (attrs ->> 'NAME'), $2, staging.as_multipolygon(geom)
+           SELECT $1, attrs ->> 'GEOID', CASE WHEN attrs ->> 'NAME' ILIKE 'census tract%' THEN attrs ->> 'NAME' ELSE 'Census Tract ' || (attrs ->> 'NAME') END, $2, staging.as_multipolygon(geom)
              FROM staging.features
             WHERE source_key = $3 AND staging.as_multipolygon(geom) IS NOT NULL`,
           [pullId, svc.vintage, key],

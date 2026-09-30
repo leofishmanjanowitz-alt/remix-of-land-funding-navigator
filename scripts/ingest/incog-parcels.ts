@@ -20,10 +20,24 @@ import {
   saveRaw,
   stageFeatures,
   transaction,
+  withoutFields,
 } from "./lib.ts";
 
 export const SOURCE_KEY = "incog_parcels";
 const URL = "https://map11.incog.org/arcgis11wa/rest/services/Parcels_TulsaCo/FeatureServer/0";
+
+/** Owner names and mailing addresses. Never stored: not in the raw copy, staging, or parcels. */
+const OWNER_FIELDS = [
+  "Owner",
+  "Name1",
+  "Name2",
+  "BusinessName",
+  "Address1",
+  "Address2",
+  "City",
+  "State",
+  "ZIPCode",
+];
 
 const download = !process.argv.includes("--no-download");
 const normalize = !process.argv.includes("--download-only");
@@ -35,7 +49,8 @@ if (download) {
   await clearStaging(SOURCE_KEY);
   const fetched = await queryAll(URL, {
     pageSize: 2000,
-    onPage: async (features, page) => {
+    onPage: async (page_features, page) => {
+      const features = withoutFields(page_features, OWNER_FIELDS);
       await saveRaw(dir, `page-${String(page).padStart(4, "0")}.geojson`, {
         type: "FeatureCollection",
         features,

@@ -135,6 +135,16 @@ export async function queryAll(layerUrl: string, opts: QueryOptions): Promise<nu
   return total;
 }
 
+/** Removes the named properties from every feature (used to keep personal data out). */
+export function withoutFields(features: Feature[], fields: readonly string[]): Feature[] {
+  return features.map((f) => {
+    if (!f.properties) return f;
+    const properties = { ...f.properties };
+    for (const field of fields) delete properties[field];
+    return { ...f, properties };
+  });
+}
+
 export async function saveRaw(dir: string, name: string, data: unknown): Promise<void> {
   await writeFile(path.join(dir, name), JSON.stringify(data));
 }

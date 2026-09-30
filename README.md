@@ -67,24 +67,36 @@ Each source has its own ingest script. Every run keeps a raw copy under `data/ra
 ```sh
 npm run ingest:all            # everything, in dependency order (about 15 minutes)
 
-npm run ingest:jurisdictions  # City of Tulsa city limits + council districts
 npm run ingest:parcels        # Tulsa County parcels from INCOG (~285k)
+npm run ingest:municipalities # every municipality's city limits in the county (INCOG)
+npm run ingest:council        # City of Tulsa council districts
 npm run ingest:tif            # TIF districts, dissolved from the parcels' IncrementDist
 npm run ingest:hud            # HUD QCT + DDA, newest designation year available
 npm run ingest:usda           # USDA rural-ineligible areas (data.gov shapefile)
 npm run ingest:oz             # Opportunity Zones (CDFI Fund shapefile)
 ```
 
-| Table                        | Source                                                                                                           |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `parcels`                    | INCOG `Parcels_TulsaCo` (data: Tulsa County Assessor). Source-neutral columns; INCOG's own fields stay in `raw`. |
-| `overlay_tif`                | Derived: INCOG parcels dissolved by the Assessor's `IncrementDist`.                                              |
-| `overlay_qct`, `overlay_dda` | HUD eGIS, newest vintage.                                                                                        |
-| `overlay_usda_ineligible`    | USDA Rural Development. These are _ineligible_ areas: rural-eligible means outside all of them.                  |
-| `jurisdictions`              | City of Tulsa GIS: city limits and council districts.                                                            |
-| `overlay_oz`                 | CDFI Fund: tracts designated in 2018 under the 2017 Tax Cuts and Jobs Act.                                       |
+| Table                        | Source                                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parcels`                    | INCOG `Parcels_TulsaCo` (data: Tulsa County Assessor). Source-neutral columns; INCOG's own fields stay in `raw`.                                                                         |
+| `overlay_tif`                | Derived: INCOG parcels dissolved by the Assessor's `IncrementDist`.                                                                                                                      |
+| `overlay_qct`, `overlay_dda` | HUD eGIS, newest vintage.                                                                                                                                                                |
+| `overlay_usda_ineligible`    | USDA Rural Development. These are _ineligible_ areas: rural-eligible means outside all of them.                                                                                          |
+| `jurisdictions`              | `municipality`: INCOG city-limits layers, one row per municipality with parcels in Tulsa County (a parcel in none is unincorporated). `council_district`: City of Tulsa GIS, Tulsa only. |
+| `overlay_oz`                 | CDFI Fund: tracts designated in 2018 under the 2017 Tax Cuts and Jobs Act.                                                                                                               |
 
-`parcel_overlays(parcel_id)` answers which overlays a parcel is in by spatial intersection, returning `inside`, `partial`, `outside` or `not_loaded` for every overlay kind.
+`parcel_overlays(parcel_id)` answers which overlays a parcel is in by spatial intersection. It returns a row for every overlay kind, so "in none" is an explicit answer:
+
+- `inside`: more than 99% of the parcel's area is in the overlay
+- `partial`: between 1% and 99%
+- `outside`: under 1% (slivers from mismatched source boundaries do not count)
+- `not_loaded`: that overlay has not been ingested
+
+Every kind is a positive finding. `usda_rural` `inside` means the parcel is in USDA's rural-eligible area (outside the ineligible polygons). A parcel in no municipality gets the name "Unincorporated Tulsa County".
+
+No owner data is stored: owner names and mailing addresses are removed during ingest, from the raw copies, staging and `parcels` alike.
+
+Notes for the parcel search route (not built yet): return only `parcel_type` `parcel` and `condo`; rights-of-way, rail and water must never appear in search results.
 
 The INCOG service publishes no licence. Before a public launch, get written confirmation from INCOG / the Tulsa County Assessor that the parcel data may be displayed.
 
