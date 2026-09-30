@@ -448,7 +448,7 @@ function MapPage() {
               : outlines.error
                 ? "Parcel outlines could not be loaded"
                 : outlines.outlines?.truncated
-                  ? `Showing the ${outlines.outlines.count.toLocaleString()} parcels nearest the centre — zoom in to see them all`
+                  ? `${outlines.outlines.count.toLocaleString()} nearest parcels shown · zoom in for more`
                   : outlines.outlines
                     ? `${outlines.outlines.count.toLocaleString()} parcels in view${outlines.loading ? " · updating…" : ""}`
                     : "Loading parcel outlines…"}
