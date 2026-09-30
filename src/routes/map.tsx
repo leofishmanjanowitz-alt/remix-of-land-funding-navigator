@@ -1,11 +1,10 @@
 import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { GIS_LAYER_IDS, fetchGisLayer, type GisStatus } from "@/lib/tulsa-gis";
+import { useQuery } from "@tanstack/react-query";
+import type { GisStatus } from "@/lib/tulsa-gis";
 import { useParcelOutlines, type Viewport } from "@/lib/use-parcel-outlines";
 import { ApiError, getParcelDetail, parcelsAt, searchParcels } from "@/lib/parcel-api";
 import { factsFromDetail } from "@/lib/real-facts";
-import type { CandidateParcel, SelectedParcel } from "@/components/basemap";
 import { formatDate } from "@/lib/overlay-text";
 import { ParcelSearchBox } from "@/components/parcel-search";
 import { CandidateList } from "@/components/candidate-list";
@@ -17,19 +16,25 @@ import type {
   SurfaceKind,
 } from "@/lib/parcel-types";
 import { useOverlays } from "@/lib/use-overlays";
-import { OVERLAY_BY_KEY, type OverlayApiKind } from "@/lib/overlays-meta";
+import { useDisplayLayers } from "@/lib/use-display-layers";
+import { useSources } from "@/lib/use-sources";
+import {
+  OVERLAYS,
+  OVERLAY_BY_KEY,
+  layersFromParam,
+  type LayerKey,
+  type LayerState,
+} from "@/lib/overlays-meta";
+import type {
+  CandidateParcel,
+  GeoLayerRender,
+  OverlayRender,
+  SelectedParcel,
+} from "@/components/basemap";
 import { ParcelChat } from "@/components/parcel-chat";
 import { TaskPanel } from "@/components/task-panel";
 import { ReportPreview } from "@/components/report-preview";
-import {
-  LAYERS,
-  PARCELS,
-  programsFor,
-  programsFromFacts,
-  type LayerId,
-  type Parcel,
-  type ProgramStatus,
-} from "@/lib/tulsa-map-data";
+import { PARCELS, programsFor, programsFromFacts, type ProgramStatus } from "@/lib/tulsa-map-data";
 import { INITIAL_TASKS, createManualTask, createTaskFromAction, type Task } from "@/lib/tasks";
 import { DisbursementDetail } from "@/components/disbursement";
 import { ContactBlock } from "@/components/contact-block";
@@ -55,21 +60,8 @@ import {
 } from "@/components/resident-assistance";
 
 import { PROGRAM_COVERAGE, PROGRAM_REQUIREMENTS } from "@/lib/jurisdictions";
-import {
-  LayerControl,
-  choroplethColor,
-  choroplethRange,
-  meetsThreshold,
-} from "@/components/layer-control";
-import {
-  TRACTS,
-  ZIP_AREAS,
-  nmtcEligible,
-  tractValue,
-  zipValue,
-  type ChoroplethId,
-} from "@/lib/census-layers";
-import type { UnitSize } from "@/lib/underwriting";
+import { LayerControl } from "@/components/layer-control";
+import { MapLegend } from "@/components/map-legend";
 import { UnderwritingLimits } from "@/components/underwriting";
 import { UNDERWRITING_CITATIONS } from "@/lib/underwriting";
 import { OrgFitNote, OrgProfilePrompt, StatusGates } from "@/components/org-status";
@@ -97,8 +89,9 @@ import { ALL_PLAN_CITATION_IDS, actionPlanFor, chdoPlanFor } from "@/lib/action-
 export const Route = createFileRoute("/map")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { parcel?: string; report?: boolean; q?: string } => {
-    const out: { parcel?: string; report?: boolean; q?: string } = {};
+  ): { parcel?: string; report?: boolean; q?: string; layers?: string } => {
+    const out: { parcel?: string; report?: boolean; q?: string; layers?: string } = {};
+    if (typeof search["layers"] === "string") out.layers = search["layers"];
     // A number is a real parcel id; anything else is a sample id from the prototype dashboard.
     if (typeof search["parcel"] === "string") out.parcel = search["parcel"];
     else if (typeof search["parcel"] === "number") out.parcel = String(search["parcel"]);
@@ -166,34 +159,30 @@ function MapPage() {
   const [searching, setSearching] = useState(false);
 
   // Layer selections live here, above the parcel, so they persist as the user
-  // moves between parcels.
-  const [active, setActive] = useState<Record<LayerId, boolean>>({
-    tif: true,
-    "tif-36th": false,
-    zoning: false,
-    qct: true,
-    dda: false,
-    usda: false,
-    fema: true,
-    oz: false,
-    nmtc: false,
-    district1: false,
-    htf: false,
-    nio: false,
-    nco: false,
-    hp: false,
-  });
-  const [choropleth, setChoropleth] = useState<ChoroplethId | null>(null);
-  const [unit, setUnit] = useState<UnitSize>("2br");
+  // moves between parcels. ?layers=all (or a comma list) switches them on from a link.
+  const [layers, setLayers] = useState<LayerState>(() => layersFromParam(search.layers));
+  const toggleLayer = useCallback(
+    (key: LayerKey) => setLayers((s) => ({ ...s, [key]: !s[key] })),
+    [],
+  );
   const [chatOpen, setChatOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(Boolean(search.report && sampleParcel));
   const [orgType, setOrgType] = useState<OrgType | null>(null);
   const [chdoDesignated, setChdoDesignated] = useState(false);
-  const [gisStatus, setGisStatus] = useState<Record<string, GisStatus>>({});
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const outlines = useParcelOutlines(viewport);
+
+  // Overlays from the database: only the ones switched on are fetched.
+  const overlayLoads = useOverlays(OVERLAYS.filter((o) => layers[o.key]).map((o) => o.key));
+  const overlays: OverlayRender[] = overlayLoads.flatMap((o) =>
+    o.status === "ready" ? [{ meta: OVERLAY_BY_KEY[o.kind], data: o.data }] : [],
+  );
+  // City floodplains and zoning: display only, straight from the City's service.
+  const display = useDisplayLayers(layers);
+  const layerStatus: Partial<Record<string, GisStatus>> = { ...display.status };
+  for (const o of overlayLoads) if (o.status !== "ready") layerStatus[o.kind] = o.status;
 
   const detailQuery = useQuery({
     queryKey: ["parcel", selectedId],
@@ -215,13 +204,19 @@ function MapPage() {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   }, []);
 
-  const toggle = (id: LayerId) => setActive((s) => ({ ...s, [id]: !s[id] }));
-
   // Keep the address bar in step so a selection can be shared. Written straight to history:
   // the router would quote a numeric id ("31990") and re-render the whole page.
   const setUrl = useCallback((next: { parcel?: string }) => {
-    const query = next.parcel ? `?parcel=${encodeURIComponent(next.parcel)}` : "";
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${query}`);
+    const params = new URLSearchParams(window.location.search);
+    if (next.parcel) params.set("parcel", next.parcel);
+    else params.delete("parcel");
+    params.delete("q"); // a search link is used up once its search has run
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
   }, []);
 
   const selectParcel = useCallback(
@@ -367,10 +362,9 @@ function MapPage() {
     <div className="flex min-h-screen flex-col bg-background lg:h-screen lg:flex-row lg:overflow-hidden">
       <div className="relative h-[60vh] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
         <MapCanvas
-          active={active}
-          choropleth={choropleth}
-          unit={unit}
-          onGisStatus={setGisStatus}
+          femaTiles={layers.fema}
+          geoLayers={display.geoLayers}
+          overlays={overlays}
           parcelOutlines={outlines.outlines}
           onViewportChange={setViewport}
           selected={selected}
@@ -417,16 +411,9 @@ function MapPage() {
         </div>
 
         {/* Layer control, top-left */}
-        <LayerControl
-          active={active}
-          toggle={toggle}
-          choropleth={choropleth}
-          onChoropleth={setChoropleth}
-          unit={unit}
-          onUnit={setUnit}
-          gisStatus={gisStatus}
-          className="top-4"
-        />
+        <LayerControl layers={layers} toggle={toggleLayer} status={layerStatus} className="top-4" />
+
+        <MapLegend layers={layers} className="absolute right-3 bottom-36 z-10" />
 
         {!chatOpen && (
           <button
@@ -441,7 +428,7 @@ function MapPage() {
           </button>
         )}
 
-        <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1.5">
+        <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1.5 sm:left-[20.5rem]">
           <div
             className="rule-label rounded-md bg-paper/90 px-2 py-1 backdrop-blur-sm"
             role="status"
@@ -543,21 +530,12 @@ function MapPage() {
 
 /* ------------------------------- map canvas ------------------------------ */
 
-/** Layer toggles that are now drawn from the database instead of a sample rectangle. */
-const DATABASE_LAYER: Partial<Record<LayerId, OverlayApiKind>> = {
-  tif: "tif",
-  qct: "qct",
-  dda: "dda",
-  oz: "oz",
-};
-
 const BaseMap = lazy(() => import("@/components/basemap").then((m) => ({ default: m.BaseMap })));
 
 function MapCanvas({
-  active,
-  choropleth,
-  unit,
-  onGisStatus,
+  femaTiles,
+  geoLayers,
+  overlays,
   parcelOutlines,
   onViewportChange,
   selected,
@@ -566,10 +544,9 @@ function MapCanvas({
   onMapClick,
   onSelectCandidate,
 }: {
-  active: Record<LayerId, boolean>;
-  choropleth: ChoroplethId | null;
-  unit: UnitSize;
-  onGisStatus: (s: Record<string, GisStatus>) => void;
+  femaTiles: boolean;
+  geoLayers: GeoLayerRender[];
+  overlays: OverlayRender[];
   parcelOutlines: OutlineCollection | null;
   onViewportChange: (v: Viewport) => void;
   selected: SelectedParcel | null;
@@ -578,93 +555,6 @@ function MapCanvas({
   onMapClick: (lat: number, lng: number, zoom: number) => void;
   onSelectCandidate: (id: number) => void;
 }) {
-  // Layers backed by published city GIS data are drawn as real polygons by
-  // Leaflet, so they never get an illustrative rectangle.
-  const activeLayers = LAYERS.filter((l) => active[l.id] && !l.real && !(l.id in DATABASE_LAYER));
-
-  // TIF now comes from the database, so the old live TIF layer is never requested.
-  const gisIds = GIS_LAYER_IDS.filter((id) => active[id] && !(id in DATABASE_LAYER));
-  const gisQueries = useQueries({
-    queries: GIS_LAYER_IDS.map((id) => ({
-      queryKey: ["tulsa-gis", id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => fetchGisLayer(id, signal),
-      enabled: active[id] && !(id in DATABASE_LAYER),
-      staleTime: 1000 * 60 * 60,
-      gcTime: 1000 * 60 * 60,
-    })),
-  });
-
-  useEffect(() => {
-    const status: Record<string, GisStatus> = {};
-    GIS_LAYER_IDS.forEach((id, i) => {
-      const q = gisQueries[i];
-      if (!active[id] || !q) return;
-      status[id] = q.data ? q.data.source : q.isError ? "error" : "loading";
-    });
-    onGisStatus(status);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    JSON.stringify(
-      GIS_LAYER_IDS.map((id, i) => [
-        active[id],
-        gisQueries[i]?.data?.source,
-        gisQueries[i]?.isError,
-      ]),
-    ),
-  ]);
-
-  const overlayKinds = (Object.entries(DATABASE_LAYER) as [LayerId, OverlayApiKind][])
-    .filter(([id]) => active[id])
-    .map(([, kind]) => kind);
-  const overlayLoads = useOverlays(overlayKinds);
-  const overlays = overlayLoads.flatMap((o) =>
-    o.status === "ready" ? [{ meta: OVERLAY_BY_KEY[o.kind], data: o.data }] : [],
-  );
-
-  // Recomputed every render on purpose: BaseMap diffs by layer id, so handing
-  // it a fresh array is cheap and avoids stale-memo races while data loads.
-  const geoLayers = gisIds.flatMap((id) => {
-    const q = gisQueries[GIS_LAYER_IDS.indexOf(id)];
-    const layer = LAYERS.find((l) => l.id === id);
-    if (!q?.data || !layer) return [];
-    return [{ id, data: q.data.data, color: layer.color }];
-  });
-  // Three or more stacked boundaries become unreadable as fills.
-  const outlineOnly = activeLayers.length > 2;
-
-  const artwork = (
-    <g>
-      {/* graduated choropleth — at most one, drawn beneath the boundaries */}
-      {choropleth && <ChoroplethLayer id={choropleth} unit={unit} />}
-
-      {/* overlay layers */}
-      {activeLayers.map((l) => (
-        <g key={l.id}>
-          <rect
-            x={l.rect.x}
-            y={l.rect.y}
-            width={l.rect.w}
-            height={l.rect.h}
-            fill={outlineOnly ? "none" : l.color}
-            fillOpacity={outlineOnly ? 0 : 0.14}
-            stroke={l.color}
-            strokeWidth={outlineOnly ? 2.5 : 2}
-            strokeDasharray="8 5"
-          />
-          <text
-            x={l.rect.x + 8}
-            y={l.rect.y + 18}
-            fontFamily="var(--font-mono)"
-            fontSize={11}
-            fill={l.color}
-          >
-            {l.name.toUpperCase()}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
-
   return (
     // z-0 creates a stacking context so Leaflet's internal high z-indexes
     // (tiles 200, panes 400+, controls 1000) stay inside the map and cannot
@@ -673,7 +563,7 @@ function MapCanvas({
       <ClientOnly fallback={<div className="band-soft absolute inset-0" />}>
         <Suspense fallback={<div className="band-soft absolute inset-0" />}>
           <BaseMap
-            femaFloodplain={!!active.fema}
+            femaFloodplain={femaTiles}
             geoLayers={geoLayers}
             selected={selected}
             candidates={candidates}
@@ -683,94 +573,10 @@ function MapCanvas({
             parcelOutlines={parcelOutlines}
             overlays={overlays}
             onViewportChange={onViewportChange}
-          >
-            {artwork}
-          </BaseMap>
+          />
         </Suspense>
       </ClientOnly>
     </div>
-  );
-}
-
-function ChoroplethLayer({ id, unit }: { id: ChoroplethId; unit: UnitSize }) {
-  const range = choroplethRange(id, unit);
-  const isTract =
-    id === "poverty" || id === "mfi" || id === "unemployment" || id === "nmtc-eligible";
-  const money = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-
-  if (isTract) {
-    return (
-      <g>
-        {TRACTS.map((t) => {
-          const v = tractValue(id, t);
-          const passes = meetsThreshold(id, v);
-          return (
-            <g key={t.geoid}>
-              <rect
-                x={t.rect.x}
-                y={t.rect.y}
-                width={t.rect.w}
-                height={t.rect.h}
-                fill={choroplethColor(id, v, range)}
-                fillOpacity={0.45}
-                stroke={passes ? "var(--color-accent)" : "var(--rule)"}
-                strokeWidth={passes ? 3 : 1}
-              >
-                <title>{`${t.name} — ${id === "nmtc-eligible" ? (nmtcEligible(t) ? "eligible" : "not eligible") : `${v}%`}`}</title>
-              </rect>
-              <text
-                x={t.rect.x + 8}
-                y={t.rect.y + 18}
-                fontFamily="var(--font-mono)"
-                fontSize={11}
-                fill="var(--color-foreground)"
-                pointerEvents="none"
-              >
-                {id === "nmtc-eligible" ? (nmtcEligible(t) ? "ELIGIBLE" : "NOT ELIGIBLE") : `${v}%`}
-              </text>
-            </g>
-          );
-        })}
-      </g>
-    );
-  }
-
-  return (
-    <g>
-      {ZIP_AREAS.map((z) => {
-        const v = zipValue(id, z, unit);
-        return (
-          <g key={z.zip}>
-            <rect
-              x={z.rect.x}
-              y={z.rect.y}
-              width={z.rect.w}
-              height={z.rect.h}
-              fill={choroplethColor(id, v, range)}
-              fillOpacity={0.45}
-              stroke="var(--rule)"
-              strokeWidth={1}
-            >
-              <title>{`${z.zip} — ${money.format(v)}`}</title>
-            </rect>
-            <text
-              x={z.rect.x + 8}
-              y={z.rect.y + 18}
-              fontFamily="var(--font-mono)"
-              fontSize={11}
-              fill="var(--color-foreground)"
-              pointerEvents="none"
-            >
-              {z.zip} · {money.format(v)}
-            </text>
-          </g>
-        );
-      })}
-    </g>
   );
 }
 
@@ -783,23 +589,7 @@ function statusClass(status: ProgramStatus) {
 }
 
 function EmptyPanel() {
-  const sources = useQuery({
-    queryKey: ["sources"],
-    queryFn: async ({ signal }) => {
-      const res = await fetch("/api/sources", { signal });
-      if (!res.ok) throw new Error("sources unavailable");
-      return (await res.json()) as {
-        sources: {
-          sourceKey: string;
-          datasetName: string;
-          vintage: string | null;
-          pulledAt: string;
-          recordCount: number;
-        }[];
-      };
-    },
-    staleTime: 10 * 60 * 1000,
-  });
+  const sources = useSources();
 
   return (
     <div className="flex min-h-full flex-col px-6 py-8">
@@ -820,7 +610,7 @@ function EmptyPanel() {
         <p className="rule-label">Data loaded</p>
         {sources.data ? (
           <ul className="mt-3 space-y-2.5">
-            {sources.data.sources.map((src) => (
+            {sources.data.map((src) => (
               <li key={src.sourceKey} className="text-xs leading-relaxed text-muted-foreground">
                 <span className="block text-sm text-foreground">{src.datasetName}</span>
                 {src.recordCount.toLocaleString()} records

@@ -68,7 +68,7 @@ const { count } = await transaction(async (client) => {
     client,
     {
       sourceKey: SOURCE_KEY,
-      datasetName: "Municipal city limits (INCOG <City>CL services)",
+      datasetName: "Municipal city limits (INCOG)",
       publisher: "INCOG",
       sourceUrl: BASE,
       sourceLastEdit: edited.rows[0]?.last_edit ?? null,

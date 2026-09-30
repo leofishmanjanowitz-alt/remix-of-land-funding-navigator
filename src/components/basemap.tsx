@@ -4,12 +4,10 @@
  * Browser-only: this module statically imports Leaflet, so it must be loaded
  * lazily behind <ClientOnly> (see src/routes/map.tsx).
  *
- * The existing parcel/overlay artwork is drawn in a 1200x800 coordinate space.
- * It is projected onto a fixed Tulsa bounding box with an L.svgOverlay, so the
- * drawing pans and zooms in lockstep with the tiles underneath.
+ * Everything drawn on it is real geometry in latitude/longitude: overlays and parcel
+ * outlines served from the database, plus the City of Tulsa's display-only layers.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { GIS_SOURCES, type GeoJsonFeatureCollection, type GisLayerId } from "@/lib/tulsa-gis";
@@ -17,9 +15,6 @@ import type { OutlineCollection, PolygonGeometry } from "@/lib/parcel-types";
 import type { Viewport } from "@/lib/use-parcel-outlines";
 import type { OverlayMeta } from "@/lib/overlays-meta";
 import type { OverlayCollection } from "@/lib/use-overlays";
-
-export const VIEW_W = 1200;
-export const VIEW_H = 800;
 
 /** Downtown / north Tulsa. Aspect ratio chosen to match the 3:2 drawing. */
 const SW: [number, number] = [36.118, -96.052];
@@ -89,7 +84,6 @@ export function BaseMap({
   parcelOutlines = null,
   overlays = [],
   onViewportChange,
-  children,
 }: {
   femaFloodplain: boolean;
   geoLayers?: GeoLayerRender[];
@@ -104,7 +98,6 @@ export function BaseMap({
   /** Overlays served from the database, already filtered to the ones switched on. */
   overlays?: OverlayRender[];
   onViewportChange?: (viewport: Viewport) => void;
-  children: React.ReactNode;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -131,15 +124,6 @@ export function BaseMap({
   // re-run after a remount (React StrictMode mounts effects twice in dev).
   const [epoch, setEpoch] = useState(0);
 
-  const svgEl = useMemo(() => {
-    const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    el.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
-    el.setAttribute("preserveAspectRatio", "none");
-    el.setAttribute("role", "img");
-    el.setAttribute("aria-label", "Parcel map of Tulsa, Oklahoma");
-    return el;
-  }, []);
-
   useEffect(() => {
     const host = hostRef.current;
     if (!host || mapRef.current) return;
@@ -157,8 +141,6 @@ export function BaseMap({
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
     }).addTo(map);
-
-    L.svgOverlay(svgEl, BOUNDS, { interactive: true, className: "parcel-overlay" }).addTo(map);
 
     // Panes keep parcel outlines above the overlays and below the selected parcel.
     map.createPane("overlays").style.zIndex = "410";
@@ -204,7 +186,7 @@ export function BaseMap({
       outlineCanvasRef.current = null;
       overlayRef.current.clear();
     };
-  }, [svgEl]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -256,9 +238,11 @@ export function BaseMap({
           const props = (feature.properties ?? {}) as Record<string, unknown>;
           const title = escapeHtml(src.label(props));
           const detail = src.detail?.(props);
-          lyr.bindPopup(
+          // A hover tooltip, not a click popup: a click must still select the parcel beneath.
+          lyr.bindTooltip(
             `<strong>${title}</strong>${detail ? `<br/>${escapeHtml(detail)}` : ""}` +
-              `<br/><span style="opacity:.7">${escapeHtml(src.attribution)}</span>`,
+              `<br/><span style="opacity:.7">${escapeHtml(src.attribution)} · display only</span>`,
+            { sticky: true },
           );
         },
       });
@@ -302,6 +286,9 @@ export function BaseMap({
         }),
       });
       layer.addTo(map);
+      // Filled areas sit underneath; outline-only boundaries stay readable on top.
+      if (meta.fill) layer.bringToBack();
+      else layer.bringToFront();
       store.set(meta.key, { layer, data });
     }
   }, [overlays, epoch]);
@@ -412,7 +399,6 @@ export function BaseMap({
   return (
     <div className="absolute inset-0">
       <div ref={hostRef} className="h-full w-full bg-paper-deep" />
-      {createPortal(children, svgEl)}
 
       <div className="absolute bottom-3 right-3 z-[500] flex flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-card">
         <button

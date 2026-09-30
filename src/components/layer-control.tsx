@@ -1,413 +1,213 @@
 import { useState } from "react";
-import { Cite } from "@/components/citation";
+import { LayerSwatch } from "@/components/layer-swatch";
+import { formatDate } from "@/lib/overlay-text";
 import {
-  CHOROPLETHS,
-  MFI_THRESHOLD,
-  POVERTY_THRESHOLD,
-  RENT_EFFECTIVE_NOTE,
-  RENT_EFFECTIVE_YEAR,
-  TRACTS,
-  UNEMPLOYMENT_BENCHMARK,
-  UNIT_SELECTOR,
-  ZIP_AREAS,
-  nmtcEligible,
-  tractValue,
-  zipValue,
-  type ChoroplethId,
-} from "@/lib/census-layers";
-import { LAYERS, type LayerId } from "@/lib/tulsa-map-data";
-import { GIS_SOURCES, SNAPSHOT_DATE, isGisLayer, type GisStatus } from "@/lib/tulsa-gis";
-import type { UnitSize } from "@/lib/underwriting";
+  DISPLAY_LAYERS,
+  NOT_LOADED_LAYERS,
+  OVERLAYS,
+  type LayerKey,
+  type LayerState,
+  type OverlayMeta,
+} from "@/lib/overlays-meta";
+import type { GisStatus } from "@/lib/tulsa-gis";
+import { SNAPSHOT_DATE } from "@/lib/tulsa-gis";
+import { useSources, type LoadedSource } from "@/lib/use-sources";
 
-/* ------------------------------ color scales ----------------------------- */
-
-/** Graduated teal ramp (primary hue). fraction 0 = lightest, 1 = darkest. */
-export function ramp(fraction: number): string {
-  const f = Math.max(0, Math.min(1, fraction));
-  return `oklch(${(0.95 - 0.47 * f).toFixed(3)} ${(0.025 + 0.075 * f).toFixed(3)} 215)`;
+function sourceLine(meta: OverlayMeta, src: LoadedSource | undefined): string {
+  if (!src) return meta.source;
+  const vintage =
+    src.vintage && /^\d{4}$/.test(src.vintage)
+      ? `${src.vintage} ${meta.key === "oz" ? "designation" : "designations"}`
+      : src.vintage
+        ? `dated ${src.vintage}`
+        : src.sourceLastEdit
+          ? `updated ${formatDate(src.sourceLastEdit)}`
+          : null;
+  return [meta.source, vintage, `pulled ${formatDate(src.pulledAt)}`].filter(Boolean).join(" · ");
 }
 
-export function choroplethRange(id: ChoroplethId, unit: UnitSize): [number, number] {
-  if (id === "nmtc-eligible") return [0, 1];
-  if (id === "poverty" || id === "mfi" || id === "unemployment") {
-    const vals = TRACTS.map((t) => tractValue(id, t));
-    return [Math.min(...vals), Math.max(...vals)];
-  }
-  const vals = ZIP_AREAS.map((z) => zipValue(id, z, unit));
-  return [Math.min(...vals), Math.max(...vals)];
+function overlayDetail(
+  meta: OverlayMeta,
+  src: LoadedSource | undefined,
+  status: GisStatus | undefined,
+): string {
+  if (status === "error") return "Could not be loaded";
+  if (status === "loading") return "Loading…";
+  return sourceLine(meta, src);
 }
 
-export function choroplethColor(id: ChoroplethId, value: number, range: [number, number]): string {
-  if (id === "nmtc-eligible") return value ? "var(--color-primary)" : "var(--color-secondary)";
-  const [lo, hi] = range;
-  const f = hi === lo ? 0.5 : (value - lo) / (hi - lo);
-  // For median family income, low values are the qualifying ones — invert.
-  return ramp(id === "mfi" ? 1 - f : f);
-}
-
-/** True where the value clears the statutory threshold for that measure. */
-export function meetsThreshold(id: ChoroplethId, value: number): boolean | null {
-  if (id === "poverty") return value >= POVERTY_THRESHOLD;
-  if (id === "mfi") return value <= MFI_THRESHOLD;
-  if (id === "unemployment") return value >= UNEMPLOYMENT_BENCHMARK;
-  if (id === "nmtc-eligible") return value === 1;
+function gisStatusLabel(status: GisStatus | undefined): string | null {
+  if (status === "live") return "Live from the City of Tulsa";
+  if (status === "cached")
+    return `Live service unreachable: showing a saved copy from ${SNAPSHOT_DATE}`;
+  if (status === "loading") return "Loading…";
+  if (status === "error") return "Could not be loaded";
   return null;
 }
 
-/* ------------------------------- the control ------------------------------ */
-
-const money = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
-
-type CatKey = "A" | "B" | "C" | "D";
-
-const CATEGORY_META: Record<CatKey, { label: string; blurb: string }> = {
-  A: {
-    label: "Funding eligibility geographies",
-    blurb: "Designated boundaries that make a parcel eligible.",
-  },
-  B: {
-    label: "Census indicators",
-    blurb: "The measures behind the designations, with thresholds.",
-  },
-  C: { label: "Rent limits and payment standards", blurb: `${RENT_EFFECTIVE_YEAR} schedules.` },
-  D: { label: "City of Tulsa zoning overlays", blurb: "What may be built, on top of base zoning." },
-};
-
-export function LayerControl({
-  active,
-  toggle,
-  choropleth,
-  onChoropleth,
-  unit,
-  onUnit,
-  gisStatus = {},
-  className = "top-24",
+function Row({
+  checked,
+  onChange,
+  swatch,
+  label,
+  description,
+  detail,
+  warn,
 }: {
-  active: Record<LayerId, boolean>;
-  toggle: (id: LayerId) => void;
-  choropleth: ChoroplethId | null;
-  onChoropleth: (id: ChoroplethId | null) => void;
-  unit: UnitSize;
-  onUnit: (u: UnitSize) => void;
-  gisStatus?: Record<string, GisStatus>;
+  checked: boolean;
+  onChange: () => void;
+  swatch: React.ReactNode;
+  label: string;
+  description: string;
+  detail?: string | null;
+  warn?: boolean;
+}) {
+  return (
+    <li>
+      <label className="flex cursor-pointer items-start gap-2.5 px-4 py-2 hover:bg-foreground/[0.03]">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          className="mt-1 h-3.5 w-3.5 shrink-0 accent-[var(--color-accent)]"
+        />
+        <span className="mt-0.5">{swatch}</span>
+        <span className="min-w-0 text-left">
+          <span className="block text-sm leading-snug text-foreground">{label}</span>
+          <span className="block text-xs leading-snug text-muted-foreground">{description}</span>
+          {detail && (
+            <span
+              className={`mt-0.5 block text-[11px] leading-snug ${warn ? "text-accent" : "text-muted-foreground/90"}`}
+            >
+              {detail}
+            </span>
+          )}
+        </span>
+      </label>
+    </li>
+  );
+}
+
+function Heading({ title, note }: { title: string; note?: string }) {
+  return (
+    <div className="px-4 pt-3 pb-1">
+      <p className="rule-label">{title}</p>
+      {note && <p className="mt-1 text-xs leading-snug text-muted-foreground">{note}</p>}
+    </div>
+  );
+}
+
+/** Every layer, with a toggle, what it is, who publishes it, and its vintage and pull date. */
+export function LayerControl({
+  layers,
+  toggle,
+  status,
+  className = "",
+}: {
+  layers: LayerState;
+  toggle: (key: LayerKey) => void;
+  /** Load state per layer: live/cached/loading/error. Absent when a layer is off or settled. */
+  status: Partial<Record<string, GisStatus>>;
   className?: string;
 }) {
   const [open, setOpen] = useState(true);
-  const [openCats, setOpenCats] = useState<Record<CatKey, boolean>>({
-    A: true,
-    B: false,
-    C: false,
-    D: false,
-  });
-  const toggleCat = (c: CatKey) => setOpenCats((s) => ({ ...s, [c]: !s[c] }));
-
-  const boundaryOn = LAYERS.filter((l) => active[l.id]);
-  const activeCount = boundaryOn.length + (choropleth ? 1 : 0);
-  const catA = LAYERS.filter((l) => l.category === "A");
-  const catD = LAYERS.filter((l) => l.category === "D");
-  const catBChoro = CHOROPLETHS.filter((c) => c.category === "B");
-  const catCChoro = CHOROPLETHS.filter((c) => c.category === "C");
+  const sources = useSources();
+  const byKey = new Map((sources.data ?? []).map((s) => [s.sourceKey, s]));
+  const on = Object.values(layers).filter(Boolean).length;
 
   return (
     <div
-      className={`absolute left-3 z-20 w-[19rem] max-w-[calc(100%-1.5rem)] overflow-hidden rounded-2xl border border-border bg-paper/90 shadow-panel backdrop-blur-[16px] transition-[top] ${className}`}
+      className={`absolute left-3 z-20 flex max-h-[calc(100%-2rem)] w-[19rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-paper/90 shadow-panel backdrop-blur-[16px] ${className}`}
     >
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between border-b border-border px-3 py-2"
+        className="flex items-center justify-between gap-2 px-4 py-3 text-left"
       >
         <span className="flex items-center gap-2">
           <span className="rule-label">Map layers</span>
-          <span className="flex h-5 min-w-[1.25rem] items-center justify-center bg-primary px-1.5 tabular-nums text-[11px] text-primary-foreground">
-            {activeCount}
+          <span className="rounded-md bg-primary px-1.5 text-[11px] font-medium text-primary-foreground">
+            {on}
           </span>
         </span>
-        <span className="tabular-nums text-xs text-muted-foreground">{open ? "–" : "+"}</span>
+        <span className="text-muted-foreground" aria-hidden="true">
+          {open ? "–" : "+"}
+        </span>
       </button>
 
       {open && (
-        <div className="max-h-[62vh] overflow-y-auto">
-          {/* ------------------------------ Category A ---------------------------- */}
-          <CategorySection
-            cat="A"
-            count={catA.filter((l) => active[l.id]).length}
-            open={openCats.A}
-            onToggle={() => toggleCat("A")}
-          >
-            <BoundaryList layers={catA} active={active} toggle={toggle} gisStatus={gisStatus} />
-            {boundaryOn.length > 2 && (
-              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                More than two boundary layers are on, so they draw as outlines instead of fills.
-              </p>
-            )}
-          </CategorySection>
+        <div className="min-h-0 overflow-y-auto border-t border-border pb-3">
+          <Heading
+            title="Funding designations"
+            note="Each is checked against a parcel by spatial intersection."
+          />
+          <ul>
+            {OVERLAYS.filter((o) => o.group === "designation").map((o) => (
+              <Row
+                key={o.key}
+                checked={layers[o.key]}
+                onChange={() => toggle(o.key)}
+                swatch={<LayerSwatch layer={o} />}
+                label={o.label}
+                description={o.description}
+                detail={overlayDetail(o, byKey.get(o.sourceKey), status[o.key])}
+                warn={status[o.key] === "error"}
+              />
+            ))}
+          </ul>
 
-          {/* ------------------------------ Category B ---------------------------- */}
-          <CategorySection
-            cat="B"
-            count={choropleth && catBChoro.some((c) => c.id === choropleth) ? 1 : 0}
-            open={openCats.B}
-            onToggle={() => toggleCat("B")}
-          >
-            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
-              One shaded measure at a time — overlapping graduated shading cannot be read.
+          <Heading title="Boundaries" />
+          <ul>
+            {OVERLAYS.filter((o) => o.group === "boundary").map((o) => (
+              <Row
+                key={o.key}
+                checked={layers[o.key]}
+                onChange={() => toggle(o.key)}
+                swatch={<LayerSwatch layer={o} />}
+                label={o.label}
+                description={o.description}
+                detail={overlayDetail(o, byKey.get(o.sourceKey), status[o.key])}
+                warn={status[o.key] === "error"}
+              />
+            ))}
+          </ul>
+
+          <Heading
+            title="Display only"
+            note="Drawn for reference. Not part of the parcel check and never used in a result."
+          />
+          <ul>
+            {DISPLAY_LAYERS.map((d) => {
+              const label = gisStatusLabel(status[d.key]);
+              return (
+                <Row
+                  key={d.key}
+                  checked={layers[d.key]}
+                  onChange={() => toggle(d.key)}
+                  swatch={<LayerSwatch layer={d} />}
+                  label={d.label}
+                  description={d.description}
+                  detail={label ?? `${d.source} · display only`}
+                  warn={status[d.key] === "cached" || status[d.key] === "error"}
+                />
+              );
+            })}
+          </ul>
+
+          <details className="mt-2 px-4 text-xs leading-relaxed text-muted-foreground">
+            <summary className="cursor-pointer py-1.5 rule-label">Not loaded yet</summary>
+            <p className="mt-1">
+              No real source is loaded for these. The earlier prototype drew them as sample shapes;
+              they were removed from the map.
             </p>
-            <ChoroList items={catBChoro} value={choropleth} onChange={onChoropleth} />
-            {choropleth && catBChoro.some((c) => c.id === choropleth) && (
-              <ChoroLegend id={choropleth} unit={unit} />
-            )}
-          </CategorySection>
-
-          {/* ------------------------------ Category C ---------------------------- */}
-          <CategorySection
-            cat="C"
-            count={choropleth && catCChoro.some((c) => c.id === choropleth) ? 1 : 0}
-            open={openCats.C}
-            onToggle={() => toggleCat("C")}
-          >
-            <p className="mb-2 border border-accent px-2 py-1 text-[11px] leading-relaxed text-accent rounded-lg">
-              {RENT_EFFECTIVE_NOTE}
-            </p>
-            <ChoroList items={catCChoro} value={choropleth} onChange={onChoropleth} />
-            <div className="mt-3">
-              <p className="rule-label">Bedroom size</p>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {UNIT_SELECTOR.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => onUnit(u.id)}
-                    aria-pressed={unit === u.id}
-                    className={`border px-2 py-1 text-[11px] leading-none transition-colors ${
-                      unit === u.id
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border text-muted-foreground hover:border-accent hover:text-accent"
-                    } rounded-md`}
-                  >
-                    {u.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {choropleth && catCChoro.some((c) => c.id === choropleth) && (
-              <ChoroLegend id={choropleth} unit={unit} />
-            )}
-          </CategorySection>
-
-          {/* ------------------------------ Category D ---------------------------- */}
-          <CategorySection
-            cat="D"
-            count={catD.filter((l) => active[l.id]).length}
-            open={openCats.D}
-            onToggle={() => toggleCat("D")}
-          >
-            <BoundaryList layers={catD} active={active} toggle={toggle} gisStatus={gisStatus} />
-          </CategorySection>
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
+              {NOT_LOADED_LAYERS.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </details>
         </div>
       )}
     </div>
   );
 }
-
-function CategorySection({
-  cat,
-  count,
-  open,
-  onToggle,
-  children,
-}: {
-  cat: CatKey;
-  count: number;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  const meta = CATEGORY_META[cat];
-  return (
-    <section className="border-b border-border last:border-b-0">
-      <button
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-start justify-between gap-2 px-3 py-2 text-left hover:bg-secondary"
-      >
-        <span>
-          <span className="block text-xs font-medium text-foreground">{meta.label}</span>
-          <span className="block text-[11px] leading-tight text-muted-foreground">
-            {meta.blurb}
-          </span>
-        </span>
-        <span className="mt-0.5 flex items-center gap-1.5">
-          {count > 0 && <span className="tabular-nums text-[11px] text-primary-deep">{count}</span>}
-          <span className="tabular-nums text-xs text-muted-foreground">{open ? "–" : "+"}</span>
-        </span>
-      </button>
-      {open && <div className="px-3 pb-3">{children}</div>}
-    </section>
-  );
-}
-
-const STATUS_TEXT: Record<GisStatus, string> = {
-  loading: "Loading from the city…",
-  live: "Live city data",
-  cached: `Showing saved copy (${SNAPSHOT_DATE})`,
-  error: "Could not load this layer",
-};
-
-function BoundaryList({
-  layers,
-  active,
-  toggle,
-  gisStatus = {},
-}: {
-  layers: typeof LAYERS;
-  active: Record<LayerId, boolean>;
-  toggle: (id: LayerId) => void;
-  gisStatus?: Record<string, GisStatus>;
-}) {
-  return (
-    <ul className="space-y-2">
-      {layers.map((l) => (
-        <li key={l.id}>
-          <label className="flex cursor-pointer items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={active[l.id]}
-              onChange={() => toggle(l.id)}
-              className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]"
-            />
-            <span
-              aria-hidden
-              className="mt-1 inline-block h-3 w-3 shrink-0 border rounded-sm"
-              style={{ backgroundColor: l.color, opacity: 0.45, borderColor: l.color }}
-            />
-            <span className="leading-tight">
-              <span className="text-foreground">
-                {l.name}
-                <Cite id={`ov-${l.id}`} />
-              </span>
-              <span className="block text-[11px] text-muted-foreground">{l.description}</span>
-              {isGisLayer(l.id) && (
-                <span className="mt-1 block tabular-nums text-[10px] text-muted-foreground">
-                  {active[l.id]
-                    ? (STATUS_TEXT[gisStatus[l.id] ?? "loading"] ?? "")
-                    : GIS_SOURCES[l.id].attribution}
-                </span>
-              )}
-              {l.favorable && (
-                <span className="mt-1 inline-block border border-accent bg-accent/5 px-1.5 py-0.5 text-[10px] tracking-wide text-accent rounded-md">
-                  Favorable for housing
-                </span>
-              )}
-            </span>
-          </label>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ChoroList({
-  items,
-  value,
-  onChange,
-}: {
-  items: typeof CHOROPLETHS;
-  value: ChoroplethId | null;
-  onChange: (id: ChoroplethId | null) => void;
-}) {
-  return (
-    <ul className="space-y-2">
-      <li>
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="radio"
-            name="choropleth"
-            checked={!items.some((i) => i.id === value)}
-            onChange={() => onChange(null)}
-            className="h-4 w-4 accent-[var(--color-primary)]"
-          />
-          <span className="text-muted-foreground">None</span>
-        </label>
-      </li>
-      {items.map((c) => (
-        <li key={c.id}>
-          <label className="flex cursor-pointer items-start gap-2 text-sm">
-            <input
-              type="radio"
-              name="choropleth"
-              checked={value === c.id}
-              onChange={() => onChange(c.id)}
-              className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]"
-            />
-            <span className="leading-tight">
-              <span className="text-foreground">
-                {c.name}
-                <Cite id={c.sourceId} />
-              </span>
-              <span className="block text-[11px] text-muted-foreground">{c.description}</span>
-            </span>
-          </label>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ChoroLegend({ id, unit }: { id: ChoroplethId; unit: UnitSize }) {
-  const meta = CHOROPLETHS.find((c) => c.id === id)!;
-  const [lo, hi] = choroplethRange(id, unit);
-  const isMoney = id === "tha-ps" || id === "fmr" || id === "lihtc-rent";
-  const fmt = (v: number) => (isMoney ? money.format(v) : `${v.toFixed(1)}%`);
-
-  return (
-    <div className="mt-3 border-t border-border pt-3">
-      <p className="rule-label">Legend</p>
-      {id === "nmtc-eligible" ? (
-        <ul className="mt-2 space-y-1.5 text-[11px] text-muted-foreground">
-          <li className="flex items-center gap-2">
-            <span className="h-3 w-6 bg-primary" /> Meets either test — eligible
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="h-3 w-6 border border-border bg-secondary rounded-sm" /> Meets neither
-            test
-          </li>
-        </ul>
-      ) : (
-        <>
-          <div className="mt-2 flex h-3 w-full">
-            {[0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => (
-              <span key={f} className="flex-1" style={{ backgroundColor: ramp(f) }} />
-            ))}
-          </div>
-          <div className="mt-1 flex justify-between tabular-nums text-[10px] text-muted-foreground">
-            <span>{fmt(lo)}</span>
-            <span>{fmt(hi)}</span>
-          </div>
-        </>
-      )}
-      <p className="mt-2 text-[11px] leading-relaxed text-accent">{meta.thresholdNote}</p>
-      {id === "poverty" && (
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Tracts at or above {POVERTY_THRESHOLD}% carry a heavy outline on the map.
-        </p>
-      )}
-      {id === "mfi" && (
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Tracts at or below {MFI_THRESHOLD}% carry a heavy outline on the map.
-        </p>
-      )}
-      {isMoney && (
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Shaded for the selected bedroom size, {RENT_EFFECTIVE_YEAR}.
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Tract count meeting each test, used by the panel copy. */
-export const NMTC_ELIGIBLE_TRACTS = TRACTS.filter(nmtcEligible).length;
