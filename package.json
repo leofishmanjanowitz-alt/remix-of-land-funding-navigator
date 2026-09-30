@@ -13,6 +13,13 @@
     "db:up": "docker-compose up -d --build --wait",
     "db:down": "docker-compose down",
     "db:migrate": "node --env-file=.env.local scripts/db/migrate.ts",
+    "ingest:jurisdictions": "node --env-file=.env.local scripts/ingest/jurisdictions.ts",
+    "ingest:parcels": "node --env-file=.env.local scripts/ingest/incog-parcels.ts",
+    "ingest:tif": "node --env-file=.env.local scripts/ingest/tif.ts",
+    "ingest:hud": "node --env-file=.env.local scripts/ingest/hud.ts",
+    "ingest:usda": "node --env-file=.env.local scripts/ingest/usda.ts",
+    "ingest:oz": "node --env-file=.env.local scripts/ingest/oz.ts",
+    "ingest:all": "npm run ingest:jurisdictions && npm run ingest:parcels && npm run ingest:tif && npm run ingest:hud && npm run ingest:usda && npm run ingest:oz",
     "db:psql": "docker exec -it collective-impact-db psql -U collective -d collective_impact"
   },
   "overrides": {

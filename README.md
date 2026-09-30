@@ -60,4 +60,32 @@ npm run db:down      # stop (data is kept in a Docker volume)
 
 After a restart of the Mac, run `colima start` before `npm run db:up`.
 
+### Loading data
+
+Each source has its own ingest script. Every run keeps a raw copy under `data/raw/<source>/<date>/` (git-ignored), loads a staging table, then swaps the normalized rows in inside one transaction and records a row in `source_pulls` (publisher, URL, vintage, pull date, the source's own last-edit date, row count, licence note).
+
+```sh
+npm run ingest:all            # everything, in dependency order (about 15 minutes)
+
+npm run ingest:jurisdictions  # City of Tulsa city limits + council districts
+npm run ingest:parcels        # Tulsa County parcels from INCOG (~285k)
+npm run ingest:tif            # TIF districts, dissolved from the parcels' IncrementDist
+npm run ingest:hud            # HUD QCT + DDA, newest designation year available
+npm run ingest:usda           # USDA rural-ineligible areas (data.gov shapefile)
+npm run ingest:oz             # Opportunity Zones (CDFI Fund shapefile)
+```
+
+| Table                        | Source                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `parcels`                    | INCOG `Parcels_TulsaCo` (data: Tulsa County Assessor). Source-neutral columns; INCOG's own fields stay in `raw`. |
+| `overlay_tif`                | Derived: INCOG parcels dissolved by the Assessor's `IncrementDist`.                                              |
+| `overlay_qct`, `overlay_dda` | HUD eGIS, newest vintage.                                                                                        |
+| `overlay_usda_ineligible`    | USDA Rural Development. These are _ineligible_ areas: rural-eligible means outside all of them.                  |
+| `jurisdictions`              | City of Tulsa GIS: city limits and council districts.                                                            |
+| `overlay_oz`                 | CDFI Fund: tracts designated in 2018 under the 2017 Tax Cuts and Jobs Act.                                       |
+
+`parcel_overlays(parcel_id)` answers which overlays a parcel is in by spatial intersection, returning `inside`, `partial`, `outside` or `not_loaded` for every overlay kind.
+
+The INCOG service publishes no licence. Before a public launch, get written confirmation from INCOG / the Tulsa County Assessor that the parcel data may be displayed.
+
 Feature plans from earlier development are in `docs/plans/`.
