@@ -335,6 +335,32 @@ function MapPage() {
           onSelectCandidate={selectParcel}
         />
 
+        {/* Task list toggle */}
+        <div className="absolute right-4 top-4 z-20">
+          <button
+            onClick={() => setTasksOpen(true)}
+            aria-label="Open task list"
+            className="pointer-events-auto flex items-center gap-2 border border-border bg-paper px-3 py-2 text-sm text-foreground hover:border-accent hover:text-accent rounded-md"
+          >
+            <span className="rule-label">Tasks</span>
+            {openTaskCount > 0 && (
+              <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-medium text-accent-foreground">
+                {openTaskCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Layer control, top-left */}
+        <LayerControl
+          layers={layers}
+          toggle={toggleLayer}
+          status={layerStatus}
+          className="top-[4.25rem] sm:top-4"
+        />
+
+        <MapLegend layers={layers} className="absolute right-3 bottom-36 z-10" />
+
         {/* Search and notices, top centre */}
         <div className="absolute top-4 right-28 left-4 z-20 flex max-w-xl flex-col gap-2 sm:left-[20.5rem]">
           <ParcelSearchBox onSearch={runSearch} busy={searching} initialValue={search.q ?? ""} />
@@ -355,27 +381,6 @@ function MapPage() {
           )}
         </div>
 
-        {/* Task list toggle */}
-        <div className="absolute right-4 top-4 z-20">
-          <button
-            onClick={() => setTasksOpen(true)}
-            aria-label="Open task list"
-            className="pointer-events-auto flex items-center gap-2 border border-border bg-paper px-3 py-2 text-sm text-foreground hover:border-accent hover:text-accent rounded-md"
-          >
-            <span className="rule-label">Tasks</span>
-            {openTaskCount > 0 && (
-              <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-medium text-accent-foreground">
-                {openTaskCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Layer control, top-left */}
-        <LayerControl layers={layers} toggle={toggleLayer} status={layerStatus} className="top-4" />
-
-        <MapLegend layers={layers} className="absolute right-3 bottom-36 z-10" />
-
         {!chatOpen && (
           <button
             onClick={() => setChatOpen(true)}
@@ -389,7 +394,7 @@ function MapPage() {
           </button>
         )}
 
-        <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1.5 sm:left-[20.5rem]">
+        <div className="absolute bottom-3 left-3 z-10 flex max-w-[calc(100%-14.5rem)] flex-col items-start gap-1.5 sm:left-[20.5rem] sm:max-w-none">
           <div
             className="rule-label rounded-md bg-paper/90 px-2 py-1 backdrop-blur-sm"
             role="status"

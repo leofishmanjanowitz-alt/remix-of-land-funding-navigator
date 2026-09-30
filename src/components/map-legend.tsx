@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { LayerSwatch } from "@/components/layer-swatch";
 import { DISPLAY_LAYERS, OVERLAYS, type LayerState } from "@/lib/overlays-meta";
 
@@ -6,13 +7,39 @@ export function MapLegend({ layers, className = "" }: { layers: LayerState; clas
   const overlays = OVERLAYS.filter((o) => layers[o.key]);
   const display = DISPLAY_LAYERS.filter((d) => layers[d.key]);
 
+  // Open on wide screens; on a phone it would cover much of the map, so it starts collapsed.
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 639px)").matches) setOpen(false);
+  }, []);
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className={`rounded-xl border border-border bg-paper/90 px-3 py-2 shadow-card backdrop-blur-[16px] ${className}`}
+      >
+        <span className="rule-label">Legend +</span>
+      </button>
+    );
+  }
+
   return (
     <div
       className={`max-w-[15rem] rounded-xl border border-border bg-paper/90 px-3 py-2.5 shadow-card backdrop-blur-[16px] ${className}`}
       role="group"
       aria-label="Map legend"
     >
-      <p className="rule-label">Legend</p>
+      <button
+        onClick={() => setOpen(false)}
+        aria-label="Hide legend"
+        className="flex w-full items-center justify-between gap-6 text-left"
+      >
+        <span className="rule-label">Legend</span>
+        <span className="text-muted-foreground" aria-hidden="true">
+          –
+        </span>
+      </button>
       <ul className="mt-2 space-y-1.5">
         {overlays.map((o) => (
           <li key={o.key} className="flex items-center gap-2 text-xs leading-tight text-foreground">
