@@ -32,6 +32,7 @@ const { count } = await transaction(async (client) => {
       sourceUrl: DATASET_PAGE,
       vintage: FILE_DATE,
       sourceLastEdit: eff.rows[0]?.effective ?? null,
+      boundaryBasis: "USDA ineligible-area polygons",
       licenseNote: "Creative Commons CC0 (public domain), per data.gov.",
       params: { zip_url: ZIP_URL, national_polygons: Number(eff.rows[0]?.total ?? 0) },
       notes:

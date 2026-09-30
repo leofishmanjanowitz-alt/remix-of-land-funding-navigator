@@ -90,13 +90,16 @@ npm run ingest:oz             # Opportunity Zones (CDFI Fund shapefile)
 - `inside`: more than 99% of the parcel's area is in the overlay
 - `partial`: between 1% and 99%
 - `outside`: under 1% (slivers from mismatched source boundaries do not count)
+- `boundary`: council districts only. The parcel is in Tulsa but sits in a gap between the city-limits and council-district sources, so it is assigned the district it overlaps most (or the nearest one)
 - `not_loaded`: that overlay has not been ingested
 
-Every kind is a positive finding. `usda_rural` `inside` means the parcel is in USDA's rural-eligible area (outside the ineligible polygons). A parcel in no municipality gets the name "Unincorporated Tulsa County".
+Every kind is a positive finding. `usda_rural` `inside` means the parcel is in USDA's rural-eligible area (outside the ineligible polygons). A parcel in no municipality gets the name "Unincorporated Tulsa County". Council districts apply only to parcels in Tulsa.
 
-No owner data is stored: owner names and mailing addresses are removed during ingest, from the raw copies, staging and `parcels` alike.
+Each row also carries `vintage` (designation year or file date, else the source's last-edit date) and `boundary_basis` (what the boundaries are drawn on: QCT 2026 on 2020 census tracts, Opportunity Zones 2018 on 2010 tracts, DDA 2026 on ZIP code tabulation areas).
 
-Notes for the parcel search route (not built yet): return only `parcel_type` `parcel` and `condo`; rights-of-way, rail and water must never appear in search results.
+Only the source fields the app uses are downloaded. Owner names, mailing addresses, sale prices and dates, exemptions and building details are never requested from the county service, so they are not in the raw copies, staging or `parcels`.
+
+Notes for the parcel search route (not built yet): return only `parcel_type` `parcel` and `condo`; rights-of-way, rail, water and `other` (divided-interest) records must never appear in search results.
 
 The INCOG service publishes no licence. Before a public launch, get written confirmation from INCOG / the Tulsa County Assessor that the parcel data may be displayed.
 

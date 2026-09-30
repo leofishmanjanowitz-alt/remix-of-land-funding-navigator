@@ -35,6 +35,7 @@ const { count } = await transaction(async (client) => {
       publisher: "Derived from Tulsa County Assessor parcel records via INCOG",
       sourceUrl: parcels.source_url,
       sourceLastEdit: parcels.source_last_edit,
+      boundaryBasis: "county parcels",
       licenseNote: "Derived dataset; same terms as the INCOG parcel pull it was built from.",
       params: { derived_from_pull: parcels.id, field: "IncrementDist", display_close_ft: CLOSE_FT },
       notes:

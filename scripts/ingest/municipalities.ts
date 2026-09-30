@@ -72,6 +72,7 @@ const { count } = await transaction(async (client) => {
       publisher: "INCOG",
       sourceUrl: BASE,
       sourceLastEdit: edited.rows[0]?.last_edit ?? null,
+      boundaryBasis: "city limits",
       licenseNote:
         "No licence published. Layers are marked 'prepared by INCOG'; confirm before public launch.",
       params: { services },

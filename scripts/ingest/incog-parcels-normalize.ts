@@ -81,7 +81,8 @@ export async function normalizeIncogParcels({ url, info, transaction, replaceCur
              NULLIF(${num("YearBuilt")}, 0)::integer,
              ${num("TotalAcctValue")}, ${num("TotalLandValue")}, ${num("TotalImpValue")},
              g.geom, ST_PointOnSurface(g.geom),
-             a - 'Legal'
+             jsonb_strip_nulls(jsonb_build_object(
+               'PAR_TYPE', a -> 'PAR_TYPE', 'IncrementDist', a -> 'IncrementDist', 'LoadDate', a -> 'LoadDate'))
            FROM (SELECT attrs AS a, staging.as_multipolygon(geom) AS geom
                    FROM staging.features WHERE source_key = $2) g
            CROSS JOIN LATERAL staging.parse_situs(g.a ->> 'PropertyAddress') ps

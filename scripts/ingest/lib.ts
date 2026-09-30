@@ -135,16 +135,6 @@ export async function queryAll(layerUrl: string, opts: QueryOptions): Promise<nu
   return total;
 }
 
-/** Removes the named properties from every feature (used to keep personal data out). */
-export function withoutFields(features: Feature[], fields: readonly string[]): Feature[] {
-  return features.map((f) => {
-    if (!f.properties) return f;
-    const properties = { ...f.properties };
-    for (const field of fields) delete properties[field];
-    return { ...f, properties };
-  });
-}
-
 export async function saveRaw(dir: string, name: string, data: unknown): Promise<void> {
   await writeFile(path.join(dir, name), JSON.stringify(data));
 }
@@ -171,6 +161,8 @@ export type PullMeta = {
   publisher: string;
   sourceUrl: string;
   vintage?: string | null;
+  /** What the boundaries are drawn on, e.g. '2020 census tracts'. */
+  boundaryBasis?: string | null;
   sourceLastEdit?: Date | null;
   licenseNote?: string | null;
   params?: Record<string, unknown>;
@@ -190,8 +182,8 @@ export async function replaceCurrent(
 ): Promise<{ pullId: number; count: number }> {
   const inserted = await client.query<{ id: number }>(
     `INSERT INTO source_pulls
-       (source_key, dataset_name, publisher, source_url, vintage, source_last_edit, license_note, params, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (source_key, dataset_name, publisher, source_url, vintage, source_last_edit, license_note, params, notes, boundary_basis)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
     [
       meta.sourceKey,
@@ -203,6 +195,7 @@ export async function replaceCurrent(
       meta.licenseNote ?? null,
       JSON.stringify(meta.params ?? {}),
       meta.notes ?? null,
+      meta.boundaryBasis ?? null,
     ],
   );
   const pullId = inserted.rows[0]!.id;

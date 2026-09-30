@@ -71,6 +71,7 @@ for (const src of SOURCES) {
         publisher: PUBLISHER,
         sourceUrl: src.url,
         sourceLastEdit: info.dataLastEdit,
+        boundaryBasis: "council district boundaries",
         licenseNote: LICENSE,
       },
       ["jurisdictions"],

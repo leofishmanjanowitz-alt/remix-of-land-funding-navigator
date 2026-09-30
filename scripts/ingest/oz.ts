@@ -30,6 +30,7 @@ const { count } = await transaction(async (client) => {
       vintage: "2018",
       // Date in the published shapefile's name.
       sourceLastEdit: new Date("2019-09-10T00:00:00Z"),
+      boundaryBasis: "2010 census tracts",
       licenseNote: "U.S. federal government work; public domain.",
       params: {
         zip_url: ZIP_URL,
