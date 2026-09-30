@@ -57,7 +57,7 @@ function unknownAnswer(topic: string): ChatAnswer {
   };
 }
 
-export function buildAnswer(query: string, parcel: Parcel | null): ChatAnswer {
+export function buildAnswer(query: string, parcel: Pick<Parcel, "address"> | null): ChatAnswer {
   const q = query.toLowerCase();
   const where = parcel ? parcel.address : "the selected parcel";
 

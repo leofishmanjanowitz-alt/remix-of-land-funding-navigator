@@ -8,7 +8,8 @@ import {
   type ChatAnswer,
 } from "@/lib/tulsa-chat";
 import { createTaskFromAction } from "@/lib/tasks";
-import { findParcelByQuery, type Parcel } from "@/lib/tulsa-map-data";
+import { searchParcels } from "@/lib/parcel-api";
+import type { SearchResult } from "@/lib/parcel-types";
 import { Cite, CitationScope, ReferenceList } from "@/components/citation";
 import {
   Conversation,
@@ -50,12 +51,14 @@ const SUGGESTIONS = [
 
 export function ParcelChat({
   parcel,
-  onSelectParcel,
+  onSearchResults,
   onClose,
   onAddTask,
 }: {
-  parcel: Parcel | null;
-  onSelectParcel: (parcel: Parcel) => void;
+  /** The parcel on the map, for questions about "this parcel". */
+  parcel: { address: string } | null;
+  /** Called with the real parcel search result; the page selects one parcel or shows a pick list. */
+  onSearchResults: (query: string, result: SearchResult) => void;
   onClose: () => void;
   onAddTask: (action: ChatAction) => void;
 }) {
@@ -73,31 +76,29 @@ export function ParcelChat({
     const text = raw.trim();
     if (!text) return;
 
-    const matchedParcel = findParcelByQuery(text);
-    if (matchedParcel && !isQuestion(text)) {
-      onSelectParcel(matchedParcel);
-      setMessages((current) => [
-        ...current,
-        { id: uid(), role: "user", text },
-        {
-          id: uid(),
-          role: "system",
-          text: `Parcel selected — ${matchedParcel.address}. The parcel facts and funding results have been updated.`,
-        },
-      ]);
-      return;
-    }
-
+    // Not a question: treat it as an address or parcel number and look it up in the
+    // Tulsa County parcel records, the same search the map's search box uses.
     if (!isQuestion(text)) {
-      setMessages((current) => [
-        ...current,
-        { id: uid(), role: "user", text },
-        {
-          id: uid(),
-          role: "system",
-          text: `I couldn't match “${text}” to a sample parcel. Try a full Tulsa street address or parcel number.`,
-        },
-      ]);
+      setMessages((current) => [...current, { id: uid(), role: "user", text }]);
+      const reply = (reply: string) =>
+        setMessages((current) => [...current, { id: uid(), role: "system", text: reply }]);
+      searchParcels(text)
+        .then((result) => {
+          const found = result.results;
+          if (found.length === 0) {
+            reply(
+              `I couldn't find “${text}” in the Tulsa County parcel records. Try a full Tulsa street address or a 14-digit parcel number.`,
+            );
+            return;
+          }
+          onSearchResults(text, result);
+          reply(
+            found.length === 1
+              ? `Parcel selected — ${found[0]!.address ?? found[0]!.parcelNumber ?? "parcel"}. The parcel facts and funding results have been updated.`
+              : `${found.length} parcels match “${text}”. Choose one from the list next to the map; nothing is selected until you do.`,
+          );
+        })
+        .catch(() => reply("The parcel search isn't available right now. Try again in a moment."));
       return;
     }
 

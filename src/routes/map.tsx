@@ -13,6 +13,7 @@ import type {
   OutlineCollection,
   ParcelDetail,
   ParcelSummary,
+  SearchResult,
   SurfaceKind,
 } from "@/lib/parcel-types";
 import { useOverlays } from "@/lib/use-overlays";
@@ -246,6 +247,33 @@ function MapPage() {
     [setUrl],
   );
 
+  // One place decides what a search result means, for the search box and the chat alike:
+  // one parcel is selected, several open a pick list, none says so. Never auto-select among several.
+  const applySearchResults = useCallback(
+    (q: string, res: SearchResult) => {
+      if (res.results.length === 0) {
+        setCandidates(null);
+        const kind = res.interpretedAs.kind;
+        setNotice(
+          kind === "parcel_number" || kind === "account_number"
+            ? `No parcel in Tulsa County has the number “${q}”.`
+            : res.interpretedAs.kind === "address" && res.interpretedAs.houseNumber === null
+              ? `No addresses found on “${q}”. Check the spelling, or add a house number.`
+              : `No parcel found at “${q}”. Check the spelling, or search the street name alone to list its addresses.`,
+        );
+      } else if (res.results.length === 1) {
+        selectParcel(res.results[0]!.id);
+      } else {
+        showCandidates({
+          title: `${res.results.length} parcels match “${q}”`,
+          hint: "Choose one. Their outlines are numbered on the map.",
+          results: res.results,
+        });
+      }
+    },
+    [selectParcel, showCandidates],
+  );
+
   const searchSeq = useRef(0);
   const runSearch = useCallback(
     async (text: string) => {
@@ -260,26 +288,7 @@ function MapPage() {
       try {
         const res = await searchParcels(q);
         if (seq !== searchSeq.current) return;
-        if (res.results.length === 0) {
-          setCandidates(null);
-          const kind = res.interpretedAs.kind;
-          setNotice(
-            kind === "parcel_number" || kind === "account_number"
-              ? `No parcel in Tulsa County has the number “${q}”.`
-              : res.interpretedAs.kind === "address" && res.interpretedAs.houseNumber === null
-                ? `No addresses found on “${q}”. Check the spelling, or add a house number.`
-                : `No parcel found at “${q}”. Check the spelling, or search the street name alone to list its addresses.`,
-          );
-        } else if (res.results.length === 1) {
-          selectParcel(res.results[0]!.id);
-        } else {
-          // Several parcels: never pick one for the user.
-          showCandidates({
-            title: `${res.results.length} parcels match “${q}”`,
-            hint: "Choose one. Their outlines are numbered on the map.",
-            results: res.results,
-          });
-        }
+        applySearchResults(q, res);
       } catch (error) {
         if (seq !== searchSeq.current) return;
         setNotice(error instanceof ApiError ? error.message : "Search is not available right now.");
@@ -287,7 +296,7 @@ function MapPage() {
         if (seq === searchSeq.current) setSearching(false);
       }
     },
-    [selectParcel, showCandidates],
+    [applySearchResults],
   );
 
   const handleMapClick = useCallback(
@@ -500,8 +509,8 @@ function MapPage() {
         {chatOpen ? (
           <div className="fixed bottom-3 right-3 z-40 h-[min(70vh,36rem)] w-[min(400px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border shadow-popover lg:rounded-none lg:static lg:h-auto lg:min-h-0 lg:w-auto lg:flex-1 lg:border-0 lg:shadow-none">
             <ParcelChat
-              parcel={null}
-              onSelectParcel={(p) => void runSearch(p.address)}
+              parcel={detail ? { address: detail.address ?? "the selected parcel" } : null}
+              onSearchResults={applySearchResults}
               onClose={() => setChatOpen(false)}
               onAddTask={(action) => addTask(createTaskFromAction(action))}
             />
