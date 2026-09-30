@@ -99,7 +99,19 @@ Each row also carries `vintage` (designation year or file date, else the source'
 
 Only the source fields the app uses are downloaded. Owner names, mailing addresses, sale prices and dates, exemptions and building details are never requested from the county service, so they are not in the raw copies, staging or `parcels`.
 
-Notes for the parcel search route (not built yet): return only `parcel_type` `parcel` and `condo`; rights-of-way, rail, water and `other` (divided-interest) records must never appear in search results.
+### API
+
+Server routes in this app, all answered from PostGIS (no outside service is called at request time):
+
+| Route                           | Returns                                                                                                                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/parcels/search?q=`    | Up to 8 parcels for an address ("112 South Elgin Avenue", "2645 E 5th St") or a county parcel/account number. Matching is scripted string normalization plus trigram similarity. |
+| `GET /api/parcels/at?lat=&lng=` | The parcel under a point. If the point is on a street, rail line or water it says so (`surface`) instead of returning a parcel.                                                  |
+| `GET /api/parcels/:id`          | Parcel facts, outline, every overlay result from `parcel_overlays`, and a plain-language `designations.message` (including when the parcel is in none).                          |
+| `GET /api/overlays/:kind`       | One overlay's boundaries as GeoJSON with its pull record. Kinds: `tif`, `qct`, `dda`, `oz`, `usda_ineligible`, `municipality`, `council_district`.                               |
+| `GET /api/sources`              | Every source currently loaded, with vintage and pull dates.                                                                                                                      |
+
+Only `parcel_type` `parcel` and `condo` are searchable or selectable. Rights-of-way, rail, water and `other` (divided-interest) records never appear in results.
 
 The INCOG service publishes no licence. Before a public launch, get written confirmation from INCOG / the Tulsa County Assessor that the parcel data may be displayed.
 
