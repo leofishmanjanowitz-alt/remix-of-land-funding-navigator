@@ -143,15 +143,6 @@ export const DISPLAY_LAYERS: DisplayLayerMeta[] = [
   },
 ];
 
-/** Planned layers with no real source loaded yet; listed so their absence is visible. */
-export const NOT_LOADED_LAYERS = [
-  "NMTC eligible tracts",
-  "Tulsa Affordable Housing Trust Fund priority area",
-  "Design overlays (NIO, NCO, Historic Preservation)",
-  "Census indicators by tract (poverty, income, unemployment)",
-  "Rent limits and payment standards",
-];
-
 export type LayerKey = OverlayApiKind | DisplayLayerKey;
 export type LayerState = Record<LayerKey, boolean>;
 

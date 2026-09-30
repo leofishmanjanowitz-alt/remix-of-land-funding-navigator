@@ -3,7 +3,6 @@ import { LayerSwatch } from "@/components/layer-swatch";
 import { formatDate } from "@/lib/overlay-text";
 import {
   DISPLAY_LAYERS,
-  NOT_LOADED_LAYERS,
   OVERLAYS,
   type LayerKey,
   type LayerState,
@@ -193,19 +192,6 @@ export function LayerControl({
               );
             })}
           </ul>
-
-          <details className="mt-2 px-4 text-xs leading-relaxed text-muted-foreground">
-            <summary className="cursor-pointer py-1.5 rule-label">Not loaded yet</summary>
-            <p className="mt-1">
-              No real source is loaded for these. The earlier prototype drew them as sample shapes;
-              they were removed from the map.
-            </p>
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
-              {NOT_LOADED_LAYERS.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          </details>
         </div>
       )}
     </div>
