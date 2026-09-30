@@ -37,4 +37,27 @@ Other scripts:
 - `npm run lint` — ESLint
 - `npm run format` — Prettier
 
+## Database (PostGIS)
+
+Parcels and every overlay are stored as PostGIS geometry (EPSG:4326). Locally the database runs in Docker.
+
+One-time setup on macOS (Colima is a free Docker runtime):
+
+```sh
+brew install colima docker docker-compose
+colima start --cpu 2 --memory 4 --disk 30
+cp .env.example .env.local
+```
+
+Then:
+
+```sh
+npm run db:up        # build and start Postgres 17 + PostGIS on 127.0.0.1:54329
+npm run db:migrate   # apply db/migrations/*.sql
+npm run db:psql      # open a SQL prompt
+npm run db:down      # stop (data is kept in a Docker volume)
+```
+
+After a restart of the Mac, run `colima start` before `npm run db:up`.
+
 Feature plans from earlier development are in `docs/plans/`.
