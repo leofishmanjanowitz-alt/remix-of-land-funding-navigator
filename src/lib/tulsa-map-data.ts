@@ -371,22 +371,214 @@ function buildParcels(): Parcel[] {
 
 export const PARCELS: Parcel[] = buildParcels();
 
-export function programsFor(parcel: Parcel): Program[] {
+/** Something a parcel test depends on: true, false, or null when it could not be settled. */
+export type Known = boolean | null;
+
+/**
+ * The inputs the program tests need. The sample parcels fill every field; a real
+ * parcel leaves `null` wherever the map data cannot settle it (zoning and floodplain
+ * are display-only layers, not part of the parcel check), and the program rows say so
+ * instead of guessing.
+ */
+export interface ProgramFacts {
+  /** False = outside the City of Tulsa, whose funds these programs are. Null = straddles the limit. */
+  inTulsa: Known;
+  qct: Known;
+  /** QCT or DDA location, either of which earns the 30% credit basis boost. */
+  basisBoost: Known;
+  /** Inside USDA's rural-eligible area. */
+  usda: Known;
+  tif: Known;
+  /** Real districts only: e.g. "T13 East End District C". */
+  tifDistrict: string | null;
+  /** Real districts only: whether the district is one of Tulsa's. */
+  tifIsTulsa: boolean;
+  htf: Known;
+  hp: Known;
+  flood: Known;
+  zoning: ZoningCode | null;
+}
+
+function sampleFacts(parcel: Parcel): ProgramFacts {
   const has = (id: LayerId) => parcel.layers.includes(id);
-  const inTif = has("tif") || has("tif-36th");
-  const flood = has("fema");
-  const zone = parcel.zoning;
-  const multifamilyOk = ["RM-1", "RM-2", "MX1-P", "MX2-U"].includes(zone);
+  return {
+    inTulsa: true,
+    qct: has("qct"),
+    basisBoost: has("qct"),
+    usda: has("usda"),
+    tif: has("tif") || has("tif-36th"),
+    tifDistrict: null,
+    tifIsTulsa: true,
+    htf: has("htf"),
+    hp: has("hp"),
+    flood: has("fema"),
+    zoning: parcel.zoning,
+  };
+}
+
+const OUTSIDE_TULSA =
+  "These are City of Tulsa funds and can only be spent on sites inside the city. This parcel is outside the City of Tulsa.";
+const STRADDLES_TULSA =
+  "This parcel straddles the City of Tulsa limit. City funds can only be spent on the part inside the city; confirm with the city before relying on this.";
+const UNSETTLED =
+  "The map data cannot settle this for the parcel: either the boundary is not loaded or the parcel straddles its edge. See the overlay readout above for the detail.";
+
+export function programsFor(parcel: Parcel): Program[] {
+  return programsFromFacts(sampleFacts(parcel));
+}
+
+export function programsFromFacts(f: ProgramFacts): Program[] {
+  const multifamilyOk = f.zoning !== null && ["RM-1", "RM-2", "MX1-P", "MX2-U"].includes(f.zoning);
+  const cityGate = (): { status: ProgramStatus; reason: string } | null =>
+    f.inTulsa === false
+      ? { status: "Not eligible", reason: OUTSIDE_TULSA }
+      : f.inTulsa === null
+        ? { status: "May be eligible", reason: STRADDLES_TULSA }
+        : null;
+
+  const cdbgGate = cityGate();
+  const homeGate = cityGate();
+  const chdoGate = cityGate();
+  const htfGate = cityGate();
+
+  const cdbg = cdbgGate ?? {
+    status: (f.qct === true ? "Likely eligible" : "May be eligible") as ProgramStatus,
+    reason:
+      f.qct === true
+        ? "The parcel sits inside a Qualified Census Tract, so the low- and moderate-income area benefit test is met on tract data alone. No household-level income survey is required."
+        : f.qct === false
+          ? "The parcel is outside a Qualified Census Tract. CDBG can still be used, but the city must document area benefit through an income survey or limited-clientele test."
+          : UNSETTLED,
+  };
+
+  const home =
+    homeGate ??
+    (f.flood === true
+      ? {
+          status: "May be eligible" as ProgramStatus,
+          reason:
+            "HOME funds may be used here, but the parcel lies in a FEMA Special Flood Hazard Area, which triggers floodplain management review and flood insurance requirements before commitment.",
+        }
+      : f.flood === null || f.zoning === null
+        ? {
+            status: "May be eligible" as ProgramStatus,
+            reason:
+              "HOME funds can be used inside the participating jurisdiction. Two site tests are not checked for this parcel yet: floodplain status (a Special Flood Hazard Area triggers extra review), and whether zoning allows the project size HOME rental deals typically need. Both are shown on the map as display-only layers.",
+          }
+        : multifamilyOk
+          ? {
+              status: "Likely eligible" as ProgramStatus,
+              reason:
+                "Zoning permits the unit counts HOME rental projects typically need, and the site is within the participating jurisdiction. Affordability period of 20 years would apply.",
+            }
+          : {
+              status: "May be eligible" as ProgramStatus,
+              reason:
+                "The site is within the participating jurisdiction, but current single-family zoning limits the project size that HOME rental funds typically underwrite.",
+            });
+
+  const chdo = chdoGate ?? {
+    status: (f.flood === false ? "Likely eligible" : "May be eligible") as ProgramStatus,
+    reason:
+      "A reserved portion of the same HOME allocation, restricted to housing owned, developed, or sponsored by a nonprofit the City of Tulsa has certified as a Community Housing Development Organization. The parcel test is identical to general HOME; what changes is who may apply. Because the pool is reserved, it is less competitive than open HOME — that is the practical argument for pursuing or partnering into designation.",
+  };
+
+  const lihtcBoost = f.basisBoost === true;
+  const lihtc =
+    f.zoning === null
+      ? {
+          status: "May be eligible" as ProgramStatus,
+          reason:
+            (lihtcBoost
+              ? "Qualified Census Tract or Difficult Development Area location grants a 30% eligible basis boost. "
+              : f.basisBoost === false
+                ? "The parcel has neither a Qualified Census Tract nor a Difficult Development Area designation, so there is no basis boost and it scores lower in the competitive round. "
+                : "The basis-boost designations could not be settled for this parcel. ") +
+            "Zoning is not checked for this parcel yet, so whether it supports the density a credit deal needs is unconfirmed.",
+        }
+      : {
+          status: (lihtcBoost && multifamilyOk
+            ? "Likely eligible"
+            : multifamilyOk
+              ? "May be eligible"
+              : "Not eligible") as ProgramStatus,
+          reason:
+            lihtcBoost && multifamilyOk
+              ? "Qualified Census Tract location grants a 30% eligible basis boost, and zoning supports the density needed to compete in the state allocation round."
+              : multifamilyOk
+                ? "Zoning supports a multifamily development, but without a QCT or DDA designation the project receives no basis boost and scores lower in the competitive round."
+                : "Current zoning does not permit multifamily by right or by special exception at the scale a credit deal requires. A rezoning would be needed first.",
+        };
+
+  const usda515 = {
+    status: (f.usda === true
+      ? "Likely eligible"
+      : f.usda === false
+        ? "Not eligible"
+        : "May be eligible") as ProgramStatus,
+    reason:
+      f.usda === true
+        ? "The parcel falls inside the USDA rural eligible area boundary, meeting the place-based test for Section 515 direct loans."
+        : f.usda === false
+          ? "The parcel is inside the urbanized area boundary and therefore fails the rural area definition used for Section 515."
+          : UNSETTLED,
+  };
+
+  const tifName = f.tifDistrict
+    ? `Tax Increment Financing — ${f.tifDistrict}`
+    : "Tax Increment Financing — Increment District No. 6";
+  const tif = {
+    status: (f.tif === true
+      ? "Likely eligible"
+      : f.tif === false
+        ? "Not eligible"
+        : "May be eligible") as ProgramStatus,
+    reason:
+      f.tif === true
+        ? f.tifDistrict
+          ? `The parcel is inside the ${f.tifDistrict} increment district, as assigned by the Tulsa County Assessor. Project costs eligible under the district's approved project plan may be reimbursed from captured increment.`
+          : "The parcel is inside the active increment district. Project costs eligible under the approved project plan may be reimbursed from captured increment."
+        : f.tif === false
+          ? "The parcel lies outside every active increment district boundary. A new district or a boundary amendment would be required."
+          : UNSETTLED,
+  };
+
+  const htf =
+    htfGate ??
+    (f.htf === true
+      ? {
+          status: "Likely eligible" as ProgramStatus,
+          reason:
+            "The parcel is inside the trust fund priority area, which receives first-tier scoring for gap financing awards in the annual funding cycle.",
+        }
+      : f.htf === null
+        ? {
+            status: "May be eligible" as ProgramStatus,
+            reason:
+              "The trust fund's priority-area boundary is not loaded, so the parcel cannot be tested against it yet. " +
+              (f.qct === true
+                ? "Qualified Census Tract location still qualifies the project for second-tier scoring if units serve households at or below 60% AMI."
+                : "Qualifying income geography is the fallback test."),
+          }
+        : f.qct === true
+          ? {
+              status: "May be eligible" as ProgramStatus,
+              reason:
+                "Outside the priority area, but Qualified Census Tract location still qualifies the project for second-tier scoring if units serve households at or below 60% AMI.",
+            }
+          : {
+              status: "Not eligible" as ProgramStatus,
+              reason:
+                "The parcel is outside both the trust fund priority area and any qualifying income geography used for scoring.",
+            });
 
   return [
     {
       id: "cdbg",
       name: "Community Development Block Grant (CDBG)",
       agency: "City of Tulsa Working in Neighborhoods / HUD",
-      status: has("qct") ? "Likely eligible" : "May be eligible",
-      reason: has("qct")
-        ? "The parcel sits inside a Qualified Census Tract, so the low- and moderate-income area benefit test is met on tract data alone. No household-level income survey is required."
-        : "The parcel is outside a Qualified Census Tract. CDBG can still be used, but the city must document area benefit through an income survey or limited-clientele test.",
+      status: cdbg.status,
+      reason: cdbg.reason,
       sourceId: "pg-cdbg",
       disbursement: "reimbursement",
       timing:
@@ -396,16 +588,8 @@ export function programsFor(parcel: Parcel): Program[] {
       id: "home",
       name: "HOME Investment Partnerships Program",
       agency: "City of Tulsa Community Development Dept.",
-      status: flood
-        ? "May be eligible"
-        : multifamilyOk
-          ? "Likely eligible"
-          : "May be eligible",
-      reason: flood
-        ? "HOME funds may be used here, but the parcel lies in a FEMA Special Flood Hazard Area, which triggers floodplain management review and flood insurance requirements before commitment."
-        : multifamilyOk
-          ? "Zoning permits the unit counts HOME rental projects typically need, and the site is within the participating jurisdiction. Affordability period of 20 years would apply."
-          : "The site is within the participating jurisdiction, but current single-family zoning limits the project size that HOME rental funds typically underwrite.",
+      status: home.status,
+      reason: home.reason,
       sourceId: "pg-home",
       disbursement: "forgivable-loan",
       timing:
@@ -415,9 +599,8 @@ export function programsFor(parcel: Parcel): Program[] {
       id: "home-chdo",
       name: "HOME — CHDO Set-Aside",
       agency: "City of Tulsa Community Development Dept. (Participating Jurisdiction) / HUD",
-      status: flood ? "May be eligible" : "Likely eligible",
-      reason:
-        "A reserved portion of the same HOME allocation, restricted to housing owned, developed, or sponsored by a nonprofit the City of Tulsa has certified as a Community Housing Development Organization. The parcel test is identical to general HOME; what changes is who may apply. Because the pool is reserved, it is less competitive than open HOME — that is the practical argument for pursuing or partnering into designation.",
+      status: chdo.status,
+      reason: chdo.reason,
       sourceId: "pg-home",
       disbursement: "forgivable-loan",
       timing:
@@ -427,13 +610,8 @@ export function programsFor(parcel: Parcel): Program[] {
       id: "lihtc",
       name: "Low-Income Housing Tax Credit (9% and 4%)",
       agency: "Oklahoma Housing Finance Agency",
-      status: has("qct") && multifamilyOk ? "Likely eligible" : multifamilyOk ? "May be eligible" : "Not eligible",
-      reason:
-        has("qct") && multifamilyOk
-          ? "Qualified Census Tract location grants a 30% eligible basis boost, and zoning supports the density needed to compete in the state allocation round."
-          : multifamilyOk
-            ? "Zoning supports a multifamily development, but without a QCT or DDA designation the project receives no basis boost and scores lower in the competitive round."
-            : "Current zoning does not permit multifamily by right or by special exception at the scale a credit deal requires. A rezoning would be needed first.",
+      status: lihtc.status,
+      reason: lihtc.reason,
       sourceId: "pg-lihtc",
       disbursement: "tax-credit-equity",
       timing:
@@ -443,10 +621,8 @@ export function programsFor(parcel: Parcel): Program[] {
       id: "usda515",
       name: "USDA Section 515 Rural Rental Housing",
       agency: "USDA Rural Development, Oklahoma State Office",
-      status: has("usda") ? "Likely eligible" : "Not eligible",
-      reason: has("usda")
-        ? "The parcel falls inside the USDA rural eligible area boundary, meeting the place-based test for Section 515 direct loans."
-        : "The parcel is inside the urbanized area boundary and therefore fails the rural area definition used for Section 515.",
+      status: usda515.status,
+      reason: usda515.reason,
       sourceId: "pg-usda515",
       disbursement: "loan",
       timing:
@@ -454,12 +630,12 @@ export function programsFor(parcel: Parcel): Program[] {
     },
     {
       id: "tif",
-      name: "Tax Increment Financing — Increment District No. 6",
-      agency: "Tulsa Development Authority",
-      status: inTif ? "Likely eligible" : "Not eligible",
-      reason: inTif
-        ? "The parcel is inside the active increment district. Project costs eligible under the approved project plan may be reimbursed from captured increment."
-        : "The parcel lies outside every active increment district boundary. A new district or a boundary amendment would be required.",
+      name: tifName,
+      agency: f.tifIsTulsa
+        ? "Tulsa Development Authority"
+        : "The city or authority that created the district",
+      status: tif.status,
+      reason: tif.reason,
       sourceId: "pg-tif",
       disbursement: "tax-increment",
       timing:
@@ -469,12 +645,8 @@ export function programsFor(parcel: Parcel): Program[] {
       id: "htf",
       name: "Tulsa Affordable Housing Trust Fund",
       agency: "City of Tulsa / Tulsa Housing Authority",
-      status: has("htf") ? "Likely eligible" : has("qct") ? "May be eligible" : "Not eligible",
-      reason: has("htf")
-        ? "The parcel is inside the trust fund priority area, which receives first-tier scoring for gap financing awards in the annual funding cycle."
-        : has("qct")
-          ? "Outside the priority area, but Qualified Census Tract location still qualifies the project for second-tier scoring if units serve households at or below 60% AMI."
-          : "The parcel is outside both the trust fund priority area and any qualifying income geography used for scoring.",
+      status: htf.status,
+      reason: htf.reason,
       sourceId: "pg-htf",
       disbursement: "cash-up-front",
       timing:
@@ -492,7 +664,7 @@ export function programsFor(parcel: Parcel): Program[] {
       timing:
         "Reimbursement \u2014 you pay the environmental consultant and the hauler first, then submit documentation and are repaid. Budget for carrying those costs for weeks, not days.",
     },
-    ...(has("hp")
+    ...(f.hp === true
       ? [
           {
             id: "htc",

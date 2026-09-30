@@ -13,7 +13,7 @@ import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { GIS_SOURCES, type GeoJsonFeatureCollection, type GisLayerId } from "@/lib/tulsa-gis";
-import type { OutlineCollection } from "@/lib/parcel-types";
+import type { OutlineCollection, PolygonGeometry } from "@/lib/parcel-types";
 import type { Viewport } from "@/lib/use-parcel-outlines";
 import type { OverlayMeta } from "@/lib/overlays-meta";
 import type { OverlayCollection } from "@/lib/use-overlays";
@@ -40,18 +40,18 @@ export interface GeoLayerRender {
   color: string;
 }
 
-/** Selected parcel, in the 1200x800 drawing space. */
-export interface FocusTarget {
-  id: string;
-  points: [number, number][];
+/** The selected parcel: its real outline and a label for the tooltip. */
+export interface SelectedParcel {
+  id: number;
+  geometry: PolygonGeometry;
   label: string;
 }
 
-/** Drawing space -> lat/lng, matching the L.svgOverlay projection onto BOUNDS. */
-function toLatLng([x, y]: [number, number]): [number, number] {
-  const lng = SW[1] + (x / VIEW_W) * (NE[1] - SW[1]);
-  const lat = NE[0] - (y / VIEW_H) * (NE[0] - SW[0]);
-  return [lat, lng];
+/** A parcel in an open pick list, numbered to match the list. */
+export interface CandidateParcel {
+  id: number;
+  n: number;
+  geometry: PolygonGeometry;
 }
 
 /** Leaflet writes SVG presentation attributes, which do not resolve var(). */
@@ -69,10 +69,23 @@ function escapeHtml(value: string): string {
   );
 }
 
+/** Leave room for the layer panel on the left and the search box along the top. */
+function framing(map: L.Map): L.FitBoundsOptions {
+  const wide = map.getSize().x > 900;
+  return {
+    paddingTopLeft: L.point(wide ? 340 : 24, 80),
+    paddingBottomRight: L.point(24, 48),
+  };
+}
+
 export function BaseMap({
   femaFloodplain,
   geoLayers = [],
-  focus = null,
+  selected = null,
+  candidates = [],
+  highlightId = null,
+  onMapClick,
+  onSelectCandidate,
   parcelOutlines = null,
   overlays = [],
   onViewportChange,
@@ -80,7 +93,12 @@ export function BaseMap({
 }: {
   femaFloodplain: boolean;
   geoLayers?: GeoLayerRender[];
-  focus?: FocusTarget | null;
+  selected?: SelectedParcel | null;
+  candidates?: CandidateParcel[];
+  highlightId?: number | null;
+  /** A click on empty map (not on a candidate), with the zoom it happened at. */
+  onMapClick?: (lat: number, lng: number, zoom: number) => void;
+  onSelectCandidate?: (id: number) => void;
   /** Real parcel outlines for the current view (street level only). */
   parcelOutlines?: OutlineCollection | null;
   /** Overlays served from the database, already filtered to the ones switched on. */
@@ -91,11 +109,21 @@ export function BaseMap({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const femaRef = useRef<L.TileLayer.WMS | null>(null);
-  const focusRef = useRef<L.Polygon | null>(null);
+  const selectedRef = useRef<L.GeoJSON | null>(null);
+  const candidateRef = useRef<{ group: L.FeatureGroup; byId: Map<number, L.GeoJSON> } | null>(null);
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
+  const onSelectCandidateRef = useRef(onSelectCandidate);
+  onSelectCandidateRef.current = onSelectCandidate;
   const outlineRef = useRef<L.GeoJSON | null>(null);
   const outlineCanvasRef = useRef<L.Canvas | null>(null);
   const overlayRef = useRef<Map<string, { layer: L.GeoJSON; data: OverlayCollection }>>(new Map());
-  const focusId = focus?.id ?? null;
+  const selectedId = selected?.id ?? null;
+  const selectedNow = useRef(selected);
+  selectedNow.current = selected;
+  const candidatesKey = candidates.map((c) => c.id).join(",");
+  const candidatesNow = useRef(candidates);
+  candidatesNow.current = candidates;
   const onViewportRef = useRef(onViewportChange);
   onViewportRef.current = onViewportChange;
   const geoRef = useRef<Map<string, { layer: L.GeoJSON; data: unknown }>>(new Map());
@@ -135,6 +163,11 @@ export function BaseMap({
     // Panes keep parcel outlines above the overlays and below the selected parcel.
     map.createPane("overlays").style.zIndex = "410";
     map.createPane("parcelOutlines").style.zIndex = "420";
+    map.createPane("candidates").style.zIndex = "430";
+    map.createPane("selection").style.zIndex = "440";
+    map.on("click", (e: L.LeafletMouseEvent) =>
+      onMapClickRef.current?.(e.latlng.lat, e.latlng.lng, map.getZoom()),
+    );
 
     mapRef.current = map;
     setEpoch((n) => n + 1);
@@ -165,7 +198,8 @@ export function BaseMap({
       mapRef.current = null;
       geoRef.current.clear();
       femaRef.current = null;
-      focusRef.current = null;
+      selectedRef.current = null;
+      candidateRef.current = null;
       outlineRef.current = null;
       outlineCanvasRef.current = null;
       overlayRef.current.clear();
@@ -297,33 +331,83 @@ export function BaseMap({
     outlineRef.current = layer;
   }, [parcelOutlines, epoch]);
 
-  // Highlight and fly to the selected parcel.
+  // The selected parcel: real outline, label, and a fly-to when the selection changes.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    if (focusRef.current) {
-      map.removeLayer(focusRef.current);
-      focusRef.current = null;
+    if (selectedRef.current) {
+      map.removeLayer(selectedRef.current);
+      selectedRef.current = null;
     }
-    if (!focus || focus.points.length < 3) return;
+    const sel = selectedNow.current;
+    if (!sel) return;
 
     const color = resolveColor("var(--accent)");
-    const polygon = L.polygon(focus.points.map(toLatLng), {
-      color,
-      weight: 3,
-      fillColor: color,
-      fillOpacity: 0.25,
+    const layer = L.geoJSON(sel.geometry as unknown as GeoJSON.GeoJsonObject, {
+      pane: "selection",
+      interactive: false,
+      style: () => ({ color, weight: 3, fillColor: color, fillOpacity: 0.25 }),
     });
-    polygon.bindTooltip(focus.label, { permanent: true, direction: "top", opacity: 0.95 });
-    polygon.addTo(map);
-    focusRef.current = polygon;
+    layer.eachLayer((l) =>
+      l.bindTooltip(sel.label, { permanent: true, direction: "top", opacity: 0.95 }),
+    );
+    layer.addTo(map);
+    selectedRef.current = layer;
+    map.flyToBounds(layer.getBounds().pad(1.2), { ...framing(map), maxZoom: 18, duration: 0.8 });
+    // Re-run only when the selected parcel changes, not on every parent render.
+  }, [selectedId, epoch]);
 
-    map.flyToBounds(polygon.getBounds().pad(1.5), { maxZoom: 17, duration: 0.8 });
-    // Re-run only when the selected parcel changes, not on every parent render:
-    // `focus` is a new object each render, and flying again would undo the user's pan and zoom.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, epoch]);
+  // Pick-list candidates: numbered dashed outlines, clickable, framed together.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (candidateRef.current) {
+      map.removeLayer(candidateRef.current.group);
+      candidateRef.current = null;
+    }
+    const list = candidatesNow.current;
+    if (list.length === 0) return;
+
+    const color = resolveColor("var(--accent)");
+    const group = L.featureGroup();
+    const byId = new Map<number, L.GeoJSON>();
+    for (const c of list) {
+      const poly = L.geoJSON(c.geometry as unknown as GeoJSON.GeoJsonObject, {
+        pane: "candidates",
+        style: () => ({ color, weight: 2, dashArray: "5 4", fillColor: color, fillOpacity: 0.12 }),
+      });
+      poly.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        onSelectCandidateRef.current?.(c.id);
+      });
+      poly.eachLayer((l) =>
+        l.bindTooltip(String(c.n), {
+          permanent: true,
+          direction: "center",
+          className: "candidate-number",
+        }),
+      );
+      poly.addTo(group);
+      byId.set(c.id, poly);
+    }
+    group.addTo(map);
+    candidateRef.current = { group, byId };
+    map.flyToBounds(group.getBounds().pad(0.6), { ...framing(map), maxZoom: 18, duration: 0.6 });
+  }, [candidatesKey, epoch]);
+
+  // Hovering a pick-list row emphasises its outline.
+  useEffect(() => {
+    const store = candidateRef.current;
+    if (!store) return;
+    const color = resolveColor("var(--accent)");
+    for (const [id, layer] of store.byId) {
+      layer.setStyle(
+        id === highlightId
+          ? { color, weight: 4, dashArray: undefined, fillOpacity: 0.3 }
+          : { color, weight: 2, dashArray: "5 4", fillOpacity: 0.12 },
+      );
+    }
+  }, [highlightId, candidatesKey, epoch]);
 
   return (
     <div className="absolute inset-0">

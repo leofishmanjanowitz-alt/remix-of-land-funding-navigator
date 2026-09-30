@@ -225,3 +225,19 @@
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
+
+/* Numbered badges on candidate parcels while a pick list is open */
+.leaflet-tooltip.candidate-number {
+  min-width: 1.5rem;
+  padding: 1px 6px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 700;
+  text-align: center;
+  box-shadow: none;
+}
+.leaflet-tooltip.candidate-number::before {
+  display: none;
+}
