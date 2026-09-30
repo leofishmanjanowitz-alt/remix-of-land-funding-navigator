@@ -124,4 +124,8 @@ Only `parcel_type` `parcel` and `condo` are searchable or selectable. Rights-of-
 
 The INCOG service publishes no licence. Before a public launch, get written confirmation from INCOG / the Tulsa County Assessor that the parcel data may be displayed.
 
+### Verifying
+
+With the database loaded and the app running, `npm run verify` checks known parcels against the API (for example 112 S ELGIN AV E must be in TIF district T13 and an Opportunity Zone, and not in a QCT or DDA; 2645 E 5 ST S must return 7 parcels and be partly in a QCT and an Opportunity Zone). It prints PASS/FAIL per check and exits non-zero on any failure. `VERIFY_BASE_URL` points it at another server.
+
 Feature plans from earlier development are in `docs/plans/`.
