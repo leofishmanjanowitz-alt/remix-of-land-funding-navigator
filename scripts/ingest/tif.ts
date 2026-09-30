@@ -61,9 +61,11 @@ const { count } = await transaction(async (client) => {
                 parcel_count,
                 staging.as_multipolygon(geom),
                 staging.as_multipolygon(
-                  ST_Transform(
-                    ST_Buffer(ST_Buffer(ST_Transform(geom, 2267), $3, 'join=mitre'), -$3::float, 'join=mitre'),
-                    4326))
+                  ST_SimplifyPreserveTopology(
+                    ST_Transform(
+                      ST_Buffer(ST_Buffer(ST_Transform(geom, 2267), $3, 'join=mitre'), -$3::float, 'join=mitre'),
+                      4326),
+                    0.00003))
            FROM dissolved`,
         [pullId, PARCEL_KEY, CLOSE_FT],
       );

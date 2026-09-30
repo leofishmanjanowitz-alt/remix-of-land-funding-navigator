@@ -131,6 +131,11 @@
   --layer-nco: oklch(0.5 0.09 45);
   --layer-hp: oklch(0.45 0.11 15);
 
+  /* Real overlays served from PostGIS */
+  --layer-usda-out: oklch(0.5 0.04 60);
+  --layer-muni: oklch(0.42 0.04 250);
+  --layer-council: oklch(0.5 0.1 95);
+
   --sidebar: oklch(0.968 0.005 229);
   --sidebar-foreground: oklch(0.278 0.03 257);
   --sidebar-primary: oklch(0.79 0.058 213);

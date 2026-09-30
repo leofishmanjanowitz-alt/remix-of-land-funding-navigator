@@ -15,6 +15,8 @@ import "leaflet/dist/leaflet.css";
 import { GIS_SOURCES, type GeoJsonFeatureCollection, type GisLayerId } from "@/lib/tulsa-gis";
 import type { OutlineCollection } from "@/lib/parcel-types";
 import type { Viewport } from "@/lib/use-parcel-outlines";
+import type { OverlayMeta } from "@/lib/overlays-meta";
+import type { OverlayCollection } from "@/lib/use-overlays";
 
 export const VIEW_W = 1200;
 export const VIEW_H = 800;
@@ -25,6 +27,11 @@ const NE: [number, number] = [36.183, -95.932];
 const BOUNDS = L.latLngBounds(SW, NE);
 
 const FEMA_WMS = "https://hazards.fema.gov/arcgis/services/public/NFHL/MapServer/WMSServer";
+
+export interface OverlayRender {
+  meta: OverlayMeta;
+  data: OverlayCollection;
+}
 
 export interface GeoLayerRender {
   id: GisLayerId;
@@ -67,6 +74,7 @@ export function BaseMap({
   geoLayers = [],
   focus = null,
   parcelOutlines = null,
+  overlays = [],
   onViewportChange,
   children,
 }: {
@@ -75,6 +83,8 @@ export function BaseMap({
   focus?: FocusTarget | null;
   /** Real parcel outlines for the current view (street level only). */
   parcelOutlines?: OutlineCollection | null;
+  /** Overlays served from the database, already filtered to the ones switched on. */
+  overlays?: OverlayRender[];
   onViewportChange?: (viewport: Viewport) => void;
   children: React.ReactNode;
 }) {
@@ -84,6 +94,7 @@ export function BaseMap({
   const focusRef = useRef<L.Polygon | null>(null);
   const outlineRef = useRef<L.GeoJSON | null>(null);
   const outlineCanvasRef = useRef<L.Canvas | null>(null);
+  const overlayRef = useRef<Map<string, { layer: L.GeoJSON; data: OverlayCollection }>>(new Map());
   const focusId = focus?.id ?? null;
   const onViewportRef = useRef(onViewportChange);
   onViewportRef.current = onViewportChange;
@@ -122,6 +133,7 @@ export function BaseMap({
     L.svgOverlay(svgEl, BOUNDS, { interactive: true, className: "parcel-overlay" }).addTo(map);
 
     // Panes keep parcel outlines above the overlays and below the selected parcel.
+    map.createPane("overlays").style.zIndex = "410";
     map.createPane("parcelOutlines").style.zIndex = "420";
 
     mapRef.current = map;
@@ -156,6 +168,7 @@ export function BaseMap({
       focusRef.current = null;
       outlineRef.current = null;
       outlineCanvasRef.current = null;
+      overlayRef.current.clear();
     };
   }, [svgEl]);
 
@@ -224,6 +237,40 @@ export function BaseMap({
     // until the next view update, so nudge Leaflet once.
     if (added) requestAnimationFrame(() => map.invalidateSize());
   }, [geoLayers, epoch]);
+
+  // Overlays from the database (display geometry), diffed by kind.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const store = overlayRef.current;
+    const wanted = new Map(overlays.map((o) => [o.meta.key, o]));
+
+    for (const [key, entry] of store) {
+      if (wanted.get(key as OverlayMeta["key"])?.data !== entry.data) {
+        map.removeLayer(entry.layer);
+        store.delete(key);
+      }
+    }
+    for (const { meta, data } of overlays) {
+      if (store.has(meta.key)) continue;
+      const color = resolveColor(meta.color);
+      const layer = L.geoJSON(data as unknown as GeoJSON.GeoJsonObject, {
+        pane: "overlays",
+        interactive: false,
+        style: () => ({
+          color,
+          weight: meta.fill ? 1.5 : 2.5,
+          opacity: 0.9,
+          fill: meta.fill,
+          fillColor: color,
+          fillOpacity: 0.14,
+          ...(meta.dash ? { dashArray: meta.dash } : {}),
+        }),
+      });
+      layer.addTo(map);
+      store.set(meta.key, { layer, data });
+    }
+  }, [overlays, epoch]);
 
   // Real parcel outlines for the current view, drawn on a canvas (thousands of polygons).
   useEffect(() => {

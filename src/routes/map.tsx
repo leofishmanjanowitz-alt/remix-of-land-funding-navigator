@@ -4,6 +4,8 @@ import { useQueries } from "@tanstack/react-query";
 import { GIS_LAYER_IDS, fetchGisLayer, type GisStatus } from "@/lib/tulsa-gis";
 import { useParcelOutlines, type Viewport } from "@/lib/use-parcel-outlines";
 import type { OutlineCollection } from "@/lib/parcel-types";
+import { useOverlays } from "@/lib/use-overlays";
+import { OVERLAY_BY_KEY, type OverlayApiKind } from "@/lib/overlays-meta";
 import { ParcelChat } from "@/components/parcel-chat";
 import { TaskPanel } from "@/components/task-panel";
 import { ReportPreview } from "@/components/report-preview";
@@ -295,6 +297,14 @@ function MapPage() {
 
 /* ------------------------------- map canvas ------------------------------ */
 
+/** Layer toggles that are now drawn from the database instead of a sample rectangle. */
+const DATABASE_LAYER: Partial<Record<LayerId, OverlayApiKind>> = {
+  tif: "tif",
+  qct: "qct",
+  dda: "dda",
+  oz: "oz",
+};
+
 const BaseMap = lazy(() => import("@/components/basemap").then((m) => ({ default: m.BaseMap })));
 
 function MapCanvas({
@@ -316,14 +326,15 @@ function MapCanvas({
 }) {
   // Layers backed by published city GIS data are drawn as real polygons by
   // Leaflet, so they never get an illustrative rectangle.
-  const activeLayers = LAYERS.filter((l) => active[l.id] && !l.real);
+  const activeLayers = LAYERS.filter((l) => active[l.id] && !l.real && !(l.id in DATABASE_LAYER));
 
-  const gisIds = GIS_LAYER_IDS.filter((id) => active[id]);
+  // TIF now comes from the database, so the old live TIF layer is never requested.
+  const gisIds = GIS_LAYER_IDS.filter((id) => active[id] && !(id in DATABASE_LAYER));
   const gisQueries = useQueries({
     queries: GIS_LAYER_IDS.map((id) => ({
       queryKey: ["tulsa-gis", id],
       queryFn: ({ signal }: { signal: AbortSignal }) => fetchGisLayer(id, signal),
-      enabled: active[id],
+      enabled: active[id] && !(id in DATABASE_LAYER),
       staleTime: 1000 * 60 * 60,
       gcTime: 1000 * 60 * 60,
     })),
@@ -347,6 +358,14 @@ function MapCanvas({
       ]),
     ),
   ]);
+
+  const overlayKinds = (Object.entries(DATABASE_LAYER) as [LayerId, OverlayApiKind][])
+    .filter(([id]) => active[id])
+    .map(([, kind]) => kind);
+  const overlayLoads = useOverlays(overlayKinds);
+  const overlays = overlayLoads.flatMap((o) =>
+    o.status === "ready" ? [{ meta: OVERLAY_BY_KEY[o.kind], data: o.data }] : [],
+  );
 
   // Recomputed every render on purpose: BaseMap diffs by layer id, so handing
   // it a fresh array is cheap and avoids stale-memo races while data loads.
@@ -404,6 +423,7 @@ function MapCanvas({
             geoLayers={geoLayers}
             focus={focus}
             parcelOutlines={parcelOutlines}
+            overlays={overlays}
             onViewportChange={onViewportChange}
           >
             {artwork}
