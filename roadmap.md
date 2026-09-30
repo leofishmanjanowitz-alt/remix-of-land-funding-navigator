@@ -6,4 +6,10 @@
 - [x] Wire layer toggles (FEMA floodplain, TIF, QCT, OZ, etc.) onto the chosen basemap
 - [x] Keep map layers below search feedback and add a clearly visible AI assistant button
 - [x] Move parcel address lookup into the AI assistant and remove the map search bar
-- [x] Real published Tulsa layers: TIF districts, city floodplains, zoning — live ArcGIS with saved-copy fallback
+- [x] Real published Tulsa layers: city floodplains and zoning — live ArcGIS with saved-copy fallback (display only; TIF now comes from county parcel records in the database)
+- [x] PostGIS database for parcels and overlays (TIF, QCT, DDA, Opportunity Zones, USDA rural, city limits, council districts), with pull dates and vintages
+- [x] Parcel search and click-to-select on the map, parcel readout from the database, pick list for several matches
+- [x] Every overlay toggles on the map, with a legend; chat lookup uses the same search
+- [ ] Zoning and floodplain as database overlays, so they can feed parcel results
+- [ ] Sources for NMTC, housing trust fund area, design overlays and census indicators
+- [ ] Reports for real parcels (need zoning)

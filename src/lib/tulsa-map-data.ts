@@ -1,7 +1,13 @@
 /**
- * Mock parcel + overlay data for the Tulsa, Oklahoma map surface.
- * Coordinate space matches the map SVG viewBox: 0 0 1200 800.
- * Everything here is fabricated sample data for the prototype.
+ * SAMPLE DATA. Fabricated for the prototype; nothing here is a real parcel or boundary.
+ *
+ * The map no longer uses any of it: real parcels and overlays come from the PostGIS database
+ * (src/server, scripts/ingest). This module remains only because the dashboard, KPI and report
+ * pages are built on it: the 20 sample parcels, the hand-drawn layer rectangles that decide their
+ * `layers`, the zoning profiles, and the program tests (programsFor runs the same logic as the
+ * map, through programsFromFacts).
+ *
+ * Coordinate space is the old SVG viewBox: 0 0 1200 800.
  */
 
 import type { DisbursementId } from "./disbursement";

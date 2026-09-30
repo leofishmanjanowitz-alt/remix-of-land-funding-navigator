@@ -103,13 +103,22 @@ Only the source fields the app uses are downloaded. Owner names, mailing address
 
 Server routes in this app, all answered from PostGIS (no outside service is called at request time):
 
-| Route                           | Returns                                                                                                                                                                          |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/parcels/search?q=`    | Up to 8 parcels for an address ("112 South Elgin Avenue", "2645 E 5th St") or a county parcel/account number. Matching is scripted string normalization plus trigram similarity. |
-| `GET /api/parcels/at?lat=&lng=` | The parcel under a point. If the point is on a street, rail line or water it says so (`surface`) instead of returning a parcel.                                                  |
-| `GET /api/parcels/:id`          | Parcel facts, outline, every overlay result from `parcel_overlays`, and a plain-language `designations.message` (including when the parcel is in none).                          |
-| `GET /api/overlays/:kind`       | One overlay's boundaries as GeoJSON with its pull record. Kinds: `tif`, `qct`, `dda`, `oz`, `usda_ineligible`, `municipality`, `council_district`.                               |
-| `GET /api/sources`              | Every source currently loaded, with vintage and pull dates.                                                                                                                      |
+| Route                                   | Returns                                                                                                                                                                                                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/parcels/search?q=`            | Up to 8 parcels for an address ("112 South Elgin Avenue", "2645 E 5th St") or a county parcel/account number. Matching is scripted string normalization plus trigram similarity.                                                                                        |
+| `GET /api/parcels/at?lat=&lng=`         | The parcel under a point. If the point is on a street, rail line or water it says so (`surface`) instead of returning a parcel.                                                                                                                                         |
+| `GET /api/parcels/:id`                  | Parcel facts, outline, every overlay result from `parcel_overlays`, and a plain-language `designations.message` (including when the parcel is in none).                                                                                                                 |
+| `GET /api/parcels/outlines?bbox=&zoom=` | Parcel outlines for the map view. Served only at zoom 16 and closer and capped at 4,000 (the ones nearest the centre first, with `truncated: true` when the cap cut any), so the browser never loads the whole county.                                                  |
+| `GET /api/overlays/:kind`               | One overlay's simplified display boundaries as GeoJSON (about 3 m tolerance, from the `display_geom` column) with its pull record. Intersection checks use the exact geometry. Kinds: `tif`, `qct`, `dda`, `oz`, `usda_ineligible`, `municipality`, `council_district`. |
+| `GET /api/sources`                      | Every source currently loaded, with vintage and pull dates.                                                                                                                                                                                                             |
+
+### The map
+
+`/map` is wired to the database through those routes: a search box and click-to-select, a readout from `/api/parcels/:id` (every overlay result with its vintage and pull date, and a plain statement when a parcel is in none), parcel outlines at street level, and a toggle and legend entry for every overlay. Several parcels at one address open a numbered pick list and nothing is auto-selected. The chat's address lookup uses the same search. Shareable links: `/map?parcel=<id>`, `/map?q=<search>`, `/map?layers=all` (or a comma list such as `tif,qct,municipality`).
+
+Floodplains (City of Tulsa and FEMA) and zoning are display-only layers: they are drawn for reference and are not used in any result. The zoning profile, census indicators and several other site tests are not part of the parcel check yet, so the funding list shows "may be eligible" for programs that depend on them.
+
+`src/lib/tulsa-map-data.ts` is sample data kept only for the dashboard, KPI and report pages. The map does not use it.
 
 Only `parcel_type` `parcel` and `condo` are searchable or selectable. Rights-of-way, rail, water and `other` (divided-interest) records never appear in results.
 
