@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { GisStatus } from "@/lib/tulsa-gis";
 import { useParcelOutlines, type Viewport } from "@/lib/use-parcel-outlines";
 import { ApiError, getParcelDetail, parcelsAt, searchParcels } from "@/lib/parcel-api";
-import { factsFromDetail } from "@/lib/real-facts";
 import { formatDate } from "@/lib/overlay-text";
 import { ParcelSearchBox } from "@/components/parcel-search";
 import { CandidateList } from "@/components/candidate-list";
@@ -35,57 +34,12 @@ import type {
 import { ParcelChat } from "@/components/parcel-chat";
 import { TaskPanel } from "@/components/task-panel";
 import { ReportPreview } from "@/components/report-preview";
-import { PARCELS, programsFor, programsFromFacts, type ProgramStatus } from "@/lib/tulsa-map-data";
-import { INITIAL_TASKS, createManualTask, createTaskFromAction, type Task } from "@/lib/tasks";
-import { DisbursementDetail } from "@/components/disbursement";
-import { ContactBlock } from "@/components/contact-block";
-import { ComplexityNote } from "@/components/complexity";
-import { AssistanceInterest } from "@/components/assistance-request";
-import { contactForProgram } from "@/lib/contacts";
-import {
-  Cite,
-  CiteStack,
-  CitationScope,
-  CoverageBar,
-  CoverageLegend,
-  LevelFilterControl,
-  LevelFilterScope,
-  ReferenceList,
-  type LevelFilterValue,
-} from "@/components/citation";
-import {
-  FundingViewTabs,
-  ResidentAssistance,
-  RESIDENT_CITATION_IDS,
-  type FundingView,
-} from "@/components/resident-assistance";
+import { PARCELS } from "@/lib/tulsa-map-data";
+import { INITIAL_TASKS, createTaskFromAction, type Task } from "@/lib/tasks";
+import { Cite, CitationScope, LevelFilterScope, ReferenceList } from "@/components/citation";
 
-import { PROGRAM_COVERAGE, PROGRAM_REQUIREMENTS } from "@/lib/jurisdictions";
 import { LayerControl } from "@/components/layer-control";
 import { MapLegend } from "@/components/map-legend";
-import { UnderwritingLimits } from "@/components/underwriting";
-import { UNDERWRITING_CITATIONS } from "@/lib/underwriting";
-import { OrgFitNote, OrgProfilePrompt, StatusGates } from "@/components/org-status";
-import { ORG_CITATION_IDS, CHDO_ROUTE_COPY, chdoRouteFor, type OrgType } from "@/lib/org-status";
-import { groupByTier, type AccessAssessment } from "@/lib/accessibility";
-import {
-  AccessModelLine,
-  AccessPath,
-  AssumedOrgNote,
-  EffortVsAward,
-  RelationshipSources,
-  TierHeading,
-  WhyNotTierOne,
-} from "@/components/accessibility";
-
-import {
-  ActionPlanView,
-  LockedPlan,
-  PlanUpgradeCard,
-  ProgramSelector,
-  type AddTaskInput,
-} from "@/components/action-plan";
-import { ALL_PLAN_CITATION_IDS, actionPlanFor, chdoPlanFor } from "@/lib/action-plans";
 
 export const Route = createFileRoute("/map")({
   validateSearch: (
@@ -107,12 +61,12 @@ export const Route = createFileRoute("/map")({
       {
         name: "description",
         content:
-          "Search a Tulsa County address or click a parcel to see which TIF, census-tract, Opportunity Zone, USDA and city boundaries it sits in, and which housing programs it may qualify for.",
+          "Search a Tulsa County address or click a parcel to see which TIF district, census tract, Difficult Development Area, Opportunity Zone, USDA area, city and council district it sits in.",
       },
       { property: "og:title", content: "Parcel funding map — Tulsa, Oklahoma" },
       {
         property: "og:description",
-        content: "Boundary overlays and funding eligibility for individual parcels.",
+        content: "Which boundary overlays a Tulsa County parcel sits in.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -170,8 +124,6 @@ function MapPage() {
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(Boolean(search.report && sampleParcel));
-  const [orgType, setOrgType] = useState<OrgType | null>(null);
-  const [chdoDesignated, setChdoDesignated] = useState(false);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const outlines = useParcelOutlines(viewport);
 
@@ -477,12 +429,7 @@ function MapPage() {
             <ParcelPanel
               key={detail.id}
               detail={detail}
-              orgType={orgType}
-              onOrgTypeChange={setOrgType}
-              chdoDesignated={chdoDesignated}
-              onChdoDesignatedChange={setChdoDesignated}
               onGenerateReport={reportUnavailable}
-              onAddTask={(input) => addTask(createManualTask(input))}
               onClear={clearSelection}
             />
           ) : detailQuery.isError ? (
@@ -522,7 +469,7 @@ function MapPage() {
       <ReportPreview
         parcel={sampleParcel}
         tasks={tasks}
-        orgType={orgType}
+        orgType={null}
         open={reportOpen}
         onClose={() => setReportOpen(false)}
       />
@@ -591,12 +538,6 @@ function MapCanvas({
 
 /* ------------------------------- side panel ------------------------------ */
 
-function statusClass(status: ProgramStatus) {
-  if (status === "Likely eligible") return "border-primary bg-primary text-primary-foreground";
-  if (status === "May be eligible") return "border-accent text-accent";
-  return "border-border text-muted-foreground";
-}
-
 function EmptyPanel() {
   const sources = useSources();
 
@@ -651,51 +592,19 @@ function SampleParcelNotice({ address }: { address: string }) {
 
 function ParcelPanel({
   detail,
-  orgType,
-  onOrgTypeChange,
-  chdoDesignated,
-  onChdoDesignatedChange,
   onGenerateReport,
-  onAddTask,
   onClear,
 }: {
   detail: ParcelDetail;
-  orgType: OrgType | null;
-  onOrgTypeChange: (v: OrgType | null) => void;
-  chdoDesignated: boolean;
-  onChdoDesignatedChange: (v: boolean) => void;
   onGenerateReport: () => void;
-  onAddTask: (input: AddTaskInput) => void;
   onClear: () => void;
 }) {
-  const [levelFilter, setLevelFilter] = useState<LevelFilterValue>("all");
-  const [fundingView, setFundingView] = useState<FundingView>("development");
-  const [residentView, setResidentView] = useState<"renter" | "buyer">("renter");
-  const [chosenProgram, setChosenProgram] = useState<string | null>(null);
-
-  // Program tests run on what the database settled; unsettled inputs stay unsettled.
-  const programs = programsFromFacts(factsFromDetail(detail));
   const address = detail.address ?? "No street address on record";
-  const place = [detail.city, "OK", detail.zip].filter(Boolean).join(" ").replace("OK", "OK");
-
-  const citationIds = [
-    "assessor-record",
-    "assessor-value",
-    ...programs.flatMap((p) => [
-      p.sourceId,
-      ...(PROGRAM_REQUIREMENTS[p.id] ?? []).flatMap((r) => r.sourceIds),
-    ]),
-    ...UNDERWRITING_CITATIONS,
-    ...RESIDENT_CITATION_IDS,
-    ...ALL_PLAN_CITATION_IDS,
-    ...ORG_CITATION_IDS,
-    "pg-htc",
-    "st-shpo",
-  ];
+  const place = [detail.city, "OK", detail.zip].filter(Boolean).join(" ");
 
   return (
-    <CitationScope ids={citationIds}>
-      <LevelFilterScope value={levelFilter}>
+    <CitationScope ids={["assessor-record", "assessor-value"]}>
+      <LevelFilterScope value="all">
         <div className="flex min-h-full flex-col">
           <div className="border-b border-border px-6 py-5">
             <div className="flex items-center justify-between gap-3">
@@ -711,6 +620,10 @@ function ParcelPanel({
             </h1>
             <p className="text-sm text-muted-foreground">{place}</p>
           </div>
+
+          <Section title="Where this parcel sits">
+            <OverlayReadout detail={detail} />
+          </Section>
 
           <Section title="Parcel facts">
             <dl className="divide-y divide-border border-y border-border">
@@ -743,7 +656,6 @@ function ParcelPanel({
                   value={`land ${currency.format(detail.landValue)} · improvements ${currency.format(detail.improvementValue)}`}
                 />
               )}
-              <Fact label="Zoning" value="Not checked — shown on the map as a display-only layer" />
             </dl>
             {detail.legalDescription && (
               <details className="mt-3 text-xs leading-relaxed text-muted-foreground">
@@ -752,141 +664,6 @@ function ParcelPanel({
               </details>
             )}
             <ParcelSourceLine detail={detail} />
-          </Section>
-
-          <Section title="Where this parcel sits">
-            <OverlayReadout detail={detail} />
-          </Section>
-
-          <Section title="Eligible funding">
-            <FundingViewTabs value={fundingView} onChange={setFundingView} className="mb-4" />
-            {fundingView === "development" ? (
-              <>
-                <p className="mb-4 border-l-2 border-accent pl-3 text-xs leading-relaxed text-muted-foreground">
-                  A preliminary read from the boundaries above. Floodplain, zoning and the housing
-                  trust fund area are not part of the parcel check yet, so programs that depend on
-                  them show “may be eligible” rather than a finding.
-                </p>
-                <OrgProfilePrompt value={orgType} onChange={onOrgTypeChange} className="mb-4" />
-                <LevelFilterControl
-                  value={levelFilter}
-                  onChange={setLevelFilter}
-                  className="mb-4"
-                />
-                <CoverageLegend className="mb-4" />
-                <AssumedOrgNote org={orgType} className="mb-4" />
-                {groupByTier(programs, orgType, chdoDesignated).map((group) => (
-                  <div key={group.tier} className="mb-6">
-                    <TierHeading tier={group.tier} count={group.items.length} />
-                    {group.items.length === 0 ? (
-                      <p className="border-y border-border py-3 text-sm leading-relaxed text-muted-foreground">
-                        Nothing on this parcel falls in this tier for your organization.
-                      </p>
-                    ) : (
-                      <ul className="border-y border-border">
-                        {group.items.map(({ item, assessment }) => (
-                          <ProgramRow
-                            key={item.id}
-                            program={item}
-                            assessment={assessment}
-                            org={orgType}
-                            chdoDesignated={chdoDesignated}
-                            onChdoDesignatedChange={onChdoDesignatedChange}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                    {group.tier === 3 && (
-                      <>
-                        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                          Capital with no parcel test — access turns on who knows you, not where the
-                          land is. Shown here so it is on your map at all.
-                        </p>
-                        <RelationshipSources className="mt-2" />
-                      </>
-                    )}
-                  </div>
-                ))}
-              </>
-            ) : (
-              <ResidentAssistance view={residentView} onViewChange={setResidentView} />
-            )}
-          </Section>
-
-          <Section title="Free action plan">
-            {(() => {
-              const eligible = programs.filter((pr) => pr.status !== "Not eligible");
-              const chosen = eligible.find((pr) => pr.id === chosenProgram) ?? null;
-              const resolvePlan = (id: string) =>
-                id === "home-chdo"
-                  ? chdoPlanFor(chdoRouteFor(orgType, chdoDesignated) ?? "certify")
-                  : actionPlanFor(id);
-              const plan = chosen ? resolvePlan(chosen.id) : null;
-              if (!chosen) {
-                return (
-                  <ProgramSelector
-                    programs={programs}
-                    chosen={chosenProgram}
-                    onChoose={setChosenProgram}
-                    resolvePlan={resolvePlan}
-                  />
-                );
-              }
-              if (!plan) {
-                return (
-                  <LockedPlan
-                    programName={chosen.name}
-                    onChangeProgram={() => setChosenProgram(null)}
-                    onUpgrade={onGenerateReport}
-                  />
-                );
-              }
-              return (
-                <>
-                  <ActionPlanView
-                    plan={plan}
-                    onAddTask={onAddTask}
-                    onChangeProgram={() => setChosenProgram(null)}
-                  />
-                  <AssistanceInterest
-                    programId={plan.programId}
-                    programName={plan.programName}
-                    parcelId={detail.parcelNumber ?? String(detail.id)}
-                    parcelAddress={address}
-                    className="mt-6"
-                  />
-                  <PlanUpgradeCard
-                    remaining={Math.max(eligible.length - 1, 1)}
-                    onUpgrade={onGenerateReport}
-                    className="mt-6"
-                  />
-                </>
-              );
-            })()}
-          </Section>
-
-          <Section title="Organizational status gates">
-            <StatusGates org={orgType} />
-          </Section>
-
-          <Section title="Cost and time savers">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              The pre-approved plan catalog matches on a parcel's zoning and design-review overlays.
-              Neither is part of the parcel check yet, so there is nothing to match against.
-            </p>
-          </Section>
-
-          <Section title="Underwriting limits">
-            <UnderwritingLimits programs={programs} />
-          </Section>
-
-          <Section title="What you can build here">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Zoning is not part of the parcel check yet, so no permitted-use list is shown. Turn on
-              the “Zoning districts” layer to see the City of Tulsa's published zoning under this
-              parcel. It is display-only and is not used in any result above. Confirm with the City
-              of Tulsa Planning Office before relying on it.
-            </p>
           </Section>
 
           <Section title="References">
@@ -901,8 +678,7 @@ function ParcelPanel({
               Generate report for this parcel
             </button>
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Parcel facts and boundary results are from the sources listed above. Reports and the
-              funding list are a prototype.
+              Reports aren't available for real parcels yet.
             </p>
           </div>
         </div>
@@ -938,168 +714,6 @@ function Fact({
         {value}
         {citeId && <Cite id={citeId} />}
       </dd>
-    </div>
-  );
-}
-
-function ProgramRow({
-  program,
-  assessment,
-  org,
-  chdoDesignated,
-  onChdoDesignatedChange,
-}: {
-  program: ReturnType<typeof programsFor>[number];
-  assessment: AccessAssessment;
-  org: OrgType | null;
-  chdoDesignated: boolean;
-  onChdoDesignatedChange: (v: boolean) => void;
-}) {
-  const isChdo = program.id === "home-chdo";
-  const chdoRoute = isChdo ? chdoRouteFor(org, chdoDesignated) : null;
-  const [open, setOpen] = useState(false);
-  const coverage = PROGRAM_COVERAGE[program.id];
-  const requirements = PROGRAM_REQUIREMENTS[program.id] ?? [];
-  return (
-    <li className="border-b border-border last:border-b-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-start justify-between gap-3 py-3 text-left"
-      >
-        <span>
-          <span className="block text-sm font-medium leading-snug text-foreground">
-            {program.name}
-          </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">{program.agency}</span>
-        </span>
-        <span
-          className={`shrink-0 border px-2 py-0.5 text-[11px] leading-tight ${statusClass(program.status)} rounded-md`}
-        >
-          {program.status}
-        </span>
-      </button>
-      <AccessModelLine assessment={assessment} className="pb-2" />
-      <AccessPath assessment={assessment} className="mb-3" />
-      <WhyNotTierOne assessment={assessment} className="pb-3" />
-      <EffortVsAward assessment={assessment} className="mb-3" />
-      <DisbursementDetail id={program.disbursement} timing={program.timing} className="pb-3" />
-      {coverage && <CoverageBar coverage={coverage} className="pb-3" />}
-      <ComplexityNote programId={program.id} className="pb-3" />
-
-      {program.id === "home" && (
-        <p className="pb-3 text-xs leading-relaxed text-muted-foreground">
-          <span className="rule-label mr-2">Related</span>
-          The CHDO set-aside below is a reserved portion of this same HOME allocation — not
-          additional money. Fewer organizations may compete for it, which makes it the less
-          competitive of the two, but only organizations the City of Tulsa has certified may apply.
-          <Cite id="og-chdo-setaside" />
-        </p>
-      )}
-      {isChdo ? (
-        <ChdoRouteNote
-          route={chdoRoute}
-          designated={chdoDesignated}
-          onDesignatedChange={onChdoDesignatedChange}
-          className="pb-3"
-        />
-      ) : (
-        <OrgFitNote programId={program.id} org={org} className="pb-3" />
-      )}
-      {open && (
-        <div className="pb-4 pr-2">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {program.reason}
-            <Cite id={program.sourceId} />
-          </p>
-          {contactForProgram(program.id) && (
-            <div className="mt-3">
-              <p className="rule-label mb-1.5">Who administers it — direct contact</p>
-              <ContactBlock contact={contactForProgram(program.id)!} />
-            </div>
-          )}
-          {requirements.map((r) => (
-            <div key={r.claim} className="mt-3 border-l-2 border-primary pl-3">
-              <p className="rule-label">Governed at multiple levels</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-foreground">
-                {r.claim}
-                <CiteStack ids={r.sourceIds} />
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </li>
-  );
-}
-
-function ChdoRouteNote({
-  route,
-  designated,
-  onDesignatedChange,
-  className = "",
-}: {
-  route: ReturnType<typeof chdoRouteFor>;
-  designated: boolean;
-  onDesignatedChange: (v: boolean) => void;
-  className?: string;
-}) {
-  const copy = route ? CHDO_ROUTE_COPY[route] : null;
-  const badgeClass =
-    route === "designated"
-      ? "border-primary bg-primary text-primary-foreground"
-      : route === "certify"
-        ? "border-accent text-accent"
-        : "border-accent text-accent";
-
-  return (
-    <div className={className}>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        <span className="rule-label mr-2">Related</span>
-        Reserved portion of the general HOME allocation above — same money, smaller field of
-        applicants, restricted to designated organizations.
-        <Cite id="og-chdo-setaside" />
-      </p>
-
-      {copy ? (
-        <div className="mt-2.5 border-l-2 border-primary pl-3">
-          <span
-            className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${badgeClass} rounded-md`}
-          >
-            {copy.badge}
-          </span>
-          <p className="mt-1.5 text-sm font-medium text-foreground">
-            {copy.headline}
-            <Cite id="og-chdo-pj" />
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{copy.detail}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            Open the free action plan below for the{" "}
-            {route === "partner"
-              ? "partnership route — the CHDO's role in the deal and the jurisdiction's certified list"
-              : route === "certify"
-                ? "certification process with the City of Tulsa"
-                : "application into the reserved pool"}
-            .
-          </p>
-        </div>
-      ) : (
-        <p className="mt-2.5 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
-          Tell us your organization type above and this row will show whether the reserve is
-          directly available to you, reachable through certification, or reachable through a
-          partnership with a certified CHDO. Every organization type has a path.
-        </p>
-      )}
-
-      <label className="mt-2.5 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={designated}
-          onChange={(e) => onDesignatedChange(e.target.checked)}
-          className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-primary)]"
-        />
-        <span>Our organization already holds CHDO certification from the City of Tulsa.</span>
-      </label>
     </div>
   );
 }

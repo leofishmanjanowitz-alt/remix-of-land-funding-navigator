@@ -55,8 +55,9 @@ export function OverlayReadout({ detail }: { detail: ParcelDetail }) {
       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
         Each result is a spatial intersection of this parcel's outline with the boundary stored in
         the database, not a lookup at click time. Overlap under 1% of the parcel counts as outside
-        and over 99% as inside; anything between is shown as partial with its share. Floodplain,
-        zoning and several other site tests are not part of this check yet.
+        and over 99% as inside; anything between is shown as partial with its share. This panel
+        reports only which geographies the parcel falls in. Floodplain and zoning are display-only
+        map layers and are not part of it.
       </p>
     </div>
   );
