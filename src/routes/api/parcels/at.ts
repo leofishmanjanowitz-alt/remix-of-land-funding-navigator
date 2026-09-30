@@ -22,7 +22,7 @@ export const Route = createFileRoute("/api/parcels/at")({
           if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
             return problem(400, "lat/lng are out of range.");
           }
-          return json(await parcelsAt(lng, lat));
+          return json(await parcelsAt(lng, lat), { request });
         }),
     },
   },

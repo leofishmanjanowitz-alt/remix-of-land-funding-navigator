@@ -13,6 +13,8 @@ import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { GIS_SOURCES, type GeoJsonFeatureCollection, type GisLayerId } from "@/lib/tulsa-gis";
+import type { OutlineCollection } from "@/lib/parcel-types";
+import type { Viewport } from "@/lib/use-parcel-outlines";
 
 export const VIEW_W = 1200;
 export const VIEW_H = 800;
@@ -64,17 +66,27 @@ export function BaseMap({
   femaFloodplain,
   geoLayers = [],
   focus = null,
+  parcelOutlines = null,
+  onViewportChange,
   children,
 }: {
   femaFloodplain: boolean;
   geoLayers?: GeoLayerRender[];
   focus?: FocusTarget | null;
+  /** Real parcel outlines for the current view (street level only). */
+  parcelOutlines?: OutlineCollection | null;
+  onViewportChange?: (viewport: Viewport) => void;
   children: React.ReactNode;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const femaRef = useRef<L.TileLayer.WMS | null>(null);
   const focusRef = useRef<L.Polygon | null>(null);
+  const outlineRef = useRef<L.GeoJSON | null>(null);
+  const outlineCanvasRef = useRef<L.Canvas | null>(null);
+  const focusId = focus?.id ?? null;
+  const onViewportRef = useRef(onViewportChange);
+  onViewportRef.current = onViewportChange;
   const geoRef = useRef<Map<string, { layer: L.GeoJSON; data: unknown }>>(new Map());
   // Incremented each time a Leaflet map instance is created, so layer effects
   // re-run after a remount (React StrictMode mounts effects twice in dev).
@@ -97,7 +109,7 @@ export function BaseMap({
       zoomControl: false,
       attributionControl: true,
       minZoom: 11,
-      maxZoom: 18,
+      maxZoom: 19,
     });
     map.fitBounds(BOUNDS);
 
@@ -109,18 +121,41 @@ export function BaseMap({
 
     L.svgOverlay(svgEl, BOUNDS, { interactive: true, className: "parcel-overlay" }).addTo(map);
 
+    // Panes keep parcel outlines above the overlays and below the selected parcel.
+    map.createPane("parcelOutlines").style.zIndex = "420";
+
     mapRef.current = map;
     setEpoch((n) => n + 1);
+
+    // Report the visible area (debounced) so the page can load outlines for it.
+    let timer: number | undefined;
+    const report = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const b = map.getBounds();
+        // Exposed for end-to-end checks.
+        host.dataset["zoom"] = String(map.getZoom());
+        onViewportRef.current?.({
+          bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+          zoom: map.getZoom(),
+        });
+      }, 200);
+    };
+    map.on("moveend", report);
+    report();
 
     const resize = () => map.invalidateSize();
     window.addEventListener("resize", resize);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener("resize", resize);
       map.remove();
       mapRef.current = null;
       geoRef.current.clear();
       femaRef.current = null;
       focusRef.current = null;
+      outlineRef.current = null;
+      outlineCanvasRef.current = null;
     };
   }, [svgEl]);
 
@@ -190,6 +225,31 @@ export function BaseMap({
     if (added) requestAnimationFrame(() => map.invalidateSize());
   }, [geoLayers, epoch]);
 
+  // Real parcel outlines for the current view, drawn on a canvas (thousands of polygons).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (outlineRef.current) {
+      map.removeLayer(outlineRef.current);
+      outlineRef.current = null;
+    }
+    if (!parcelOutlines || parcelOutlines.features.length === 0) return;
+
+    const color = resolveColor("var(--foreground)");
+    // One canvas for the life of the map; a new one per update would leak elements.
+    const canvas = (outlineCanvasRef.current ??= L.canvas({
+      padding: 0.3,
+      pane: "parcelOutlines",
+    }));
+    const layer = L.geoJSON(parcelOutlines as unknown as GeoJSON.GeoJsonObject, {
+      pane: "parcelOutlines",
+      interactive: false,
+      style: () => ({ renderer: canvas, color, weight: 1, opacity: 0.5, fill: false }),
+    });
+    layer.addTo(map);
+    outlineRef.current = layer;
+  }, [parcelOutlines, epoch]);
+
   // Highlight and fly to the selected parcel.
   useEffect(() => {
     const map = mapRef.current;
@@ -213,7 +273,10 @@ export function BaseMap({
     focusRef.current = polygon;
 
     map.flyToBounds(polygon.getBounds().pad(1.5), { maxZoom: 17, duration: 0.8 });
-  }, [focus, epoch]);
+    // Re-run only when the selected parcel changes, not on every parent render:
+    // `focus` is a new object each render, and flying again would undo the user's pan and zoom.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, epoch]);
 
   return (
     <div className="absolute inset-0">

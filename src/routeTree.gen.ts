@@ -17,6 +17,7 @@ import { Route as ApiSourcesRouteImport } from './routes/api/sources'
 import { Route as ApiOverlaysKindRouteImport } from './routes/api/overlays/$kind'
 import { Route as ApiParcelsParcelIdRouteImport } from './routes/api/parcels/$parcelId'
 import { Route as ApiParcelsAtRouteImport } from './routes/api/parcels/at'
+import { Route as ApiParcelsOutlinesRouteImport } from './routes/api/parcels/outlines'
 import { Route as ApiParcelsSearchRouteImport } from './routes/api/parcels/search'
 
 const IndexRoute = IndexRouteImport.update({
@@ -59,6 +60,11 @@ const ApiParcelsAtRoute = ApiParcelsAtRouteImport.update({
   path: '/api/parcels/at',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiParcelsOutlinesRoute = ApiParcelsOutlinesRouteImport.update({
+  id: '/api/parcels/outlines',
+  path: '/api/parcels/outlines',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiParcelsSearchRoute = ApiParcelsSearchRouteImport.update({
   id: '/api/parcels/search',
   path: '/api/parcels/search',
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/api/overlays/$kind': typeof ApiOverlaysKindRoute
   '/api/parcels/$parcelId': typeof ApiParcelsParcelIdRoute
   '/api/parcels/at': typeof ApiParcelsAtRoute
+  '/api/parcels/outlines': typeof ApiParcelsOutlinesRoute
   '/api/parcels/search': typeof ApiParcelsSearchRoute
 }
 export interface FileRoutesByTo {
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/api/overlays/$kind': typeof ApiOverlaysKindRoute
   '/api/parcels/$parcelId': typeof ApiParcelsParcelIdRoute
   '/api/parcels/at': typeof ApiParcelsAtRoute
+  '/api/parcels/outlines': typeof ApiParcelsOutlinesRoute
   '/api/parcels/search': typeof ApiParcelsSearchRoute
 }
 export interface FileRoutesById {
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/api/overlays/$kind': typeof ApiOverlaysKindRoute
   '/api/parcels/$parcelId': typeof ApiParcelsParcelIdRoute
   '/api/parcels/at': typeof ApiParcelsAtRoute
+  '/api/parcels/outlines': typeof ApiParcelsOutlinesRoute
   '/api/parcels/search': typeof ApiParcelsSearchRoute
 }
 export interface FileRouteTypes {
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/api/overlays/$kind'
     | '/api/parcels/$parcelId'
     | '/api/parcels/at'
+    | '/api/parcels/outlines'
     | '/api/parcels/search'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/api/overlays/$kind'
     | '/api/parcels/$parcelId'
     | '/api/parcels/at'
+    | '/api/parcels/outlines'
     | '/api/parcels/search'
   id:
     | '__root__'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/api/overlays/$kind'
     | '/api/parcels/$parcelId'
     | '/api/parcels/at'
+    | '/api/parcels/outlines'
     | '/api/parcels/search'
   fileRoutesById: FileRoutesById
 }
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   ApiOverlaysKindRoute: typeof ApiOverlaysKindRoute
   ApiParcelsParcelIdRoute: typeof ApiParcelsParcelIdRoute
   ApiParcelsAtRoute: typeof ApiParcelsAtRoute
+  ApiParcelsOutlinesRoute: typeof ApiParcelsOutlinesRoute
   ApiParcelsSearchRoute: typeof ApiParcelsSearchRoute
 }
 
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiParcelsAtRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/parcels/outlines': {
+      id: '/api/parcels/outlines'
+      path: '/api/parcels/outlines'
+      fullPath: '/api/parcels/outlines'
+      preLoaderRoute: typeof ApiParcelsOutlinesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/parcels/search': {
       id: '/api/parcels/search'
       path: '/api/parcels/search'
@@ -224,6 +244,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOverlaysKindRoute: ApiOverlaysKindRoute,
   ApiParcelsParcelIdRoute: ApiParcelsParcelIdRoute,
   ApiParcelsAtRoute: ApiParcelsAtRoute,
+  ApiParcelsOutlinesRoute: ApiParcelsOutlinesRoute,
   ApiParcelsSearchRoute: ApiParcelsSearchRoute,
 }
 export const routeTree = rootRouteImport

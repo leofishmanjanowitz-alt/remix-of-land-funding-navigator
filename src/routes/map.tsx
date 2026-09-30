@@ -2,6 +2,8 @@ import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { GIS_LAYER_IDS, fetchGisLayer, type GisStatus } from "@/lib/tulsa-gis";
+import { useParcelOutlines, type Viewport } from "@/lib/use-parcel-outlines";
+import type { OutlineCollection } from "@/lib/parcel-types";
 import { ParcelChat } from "@/components/parcel-chat";
 import { TaskPanel } from "@/components/task-panel";
 import { ReportPreview } from "@/components/report-preview";
@@ -155,6 +157,8 @@ function MapPage() {
   const [orgType, setOrgType] = useState<OrgType | null>(null);
   const [chdoDesignated, setChdoDesignated] = useState(false);
   const [gisStatus, setGisStatus] = useState<Record<string, GisStatus>>({});
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const outlines = useParcelOutlines(viewport);
 
   const openTaskCount = tasks.filter((t) => !t.completed).length;
 
@@ -176,6 +180,8 @@ function MapPage() {
           choropleth={choropleth}
           unit={unit}
           onGisStatus={setGisStatus}
+          parcelOutlines={outlines.outlines}
+          onViewportChange={setViewport}
           focus={
             selected ? { id: selected.id, points: selected.points, label: selected.address } : null
           }
@@ -222,8 +228,25 @@ function MapPage() {
           </button>
         )}
 
-        <div className="absolute bottom-3 left-3 z-10 rule-label rounded-md bg-paper/85 px-2 py-1 backdrop-blur-sm">
-          Tulsa, Oklahoma · sample parcel data
+        <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1.5">
+          <div
+            className="rule-label rounded-md bg-paper/90 px-2 py-1 backdrop-blur-sm"
+            role="status"
+            aria-live="polite"
+          >
+            {!outlines.streetLevel
+              ? "Zoom in to street level to see parcel outlines"
+              : outlines.error
+                ? "Parcel outlines could not be loaded"
+                : outlines.outlines?.truncated
+                  ? `Showing the ${outlines.outlines.count.toLocaleString()} parcels nearest the centre — zoom in to see them all`
+                  : outlines.outlines
+                    ? `${outlines.outlines.count.toLocaleString()} parcels in view${outlines.loading ? " · updating…" : ""}`
+                    : "Loading parcel outlines…"}
+          </div>
+          <div className="rule-label rounded-md bg-paper/85 px-2 py-1 backdrop-blur-sm">
+            Tulsa, Oklahoma · sample parcel data
+          </div>
         </div>
       </div>
 
@@ -279,12 +302,16 @@ function MapCanvas({
   choropleth,
   unit,
   onGisStatus,
+  parcelOutlines,
+  onViewportChange,
   focus,
 }: {
   active: Record<LayerId, boolean>;
   choropleth: ChoroplethId | null;
   unit: UnitSize;
   onGisStatus: (s: Record<string, GisStatus>) => void;
+  parcelOutlines: OutlineCollection | null;
+  onViewportChange: (v: Viewport) => void;
   focus: { id: string; points: [number, number][]; label: string } | null;
 }) {
   // Layers backed by published city GIS data are drawn as real polygons by
@@ -372,7 +399,13 @@ function MapCanvas({
     <div className="absolute inset-0 z-0">
       <ClientOnly fallback={<div className="band-soft absolute inset-0" />}>
         <Suspense fallback={<div className="band-soft absolute inset-0" />}>
-          <BaseMap femaFloodplain={!!active.fema} geoLayers={geoLayers} focus={focus}>
+          <BaseMap
+            femaFloodplain={!!active.fema}
+            geoLayers={geoLayers}
+            focus={focus}
+            parcelOutlines={parcelOutlines}
+            onViewportChange={onViewportChange}
+          >
             {artwork}
           </BaseMap>
         </Suspense>

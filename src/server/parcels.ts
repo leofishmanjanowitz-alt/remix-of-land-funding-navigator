@@ -2,7 +2,14 @@
  * Parcel lookups. Everything here is answered from PostGIS; nothing calls an
  * outside service at request time.
  */
-import { parseParcelQuery, type ParsedQuery } from "@/lib/address";
+import { parseParcelQuery } from "@/lib/address";
+import type {
+  AtResult,
+  OverlayAnswer,
+  ParcelDetail,
+  ParcelSummary,
+  SearchResult,
+} from "@/lib/parcel-types";
 import { db } from "./db";
 
 /** Only real property is searchable: never rights-of-way, rail, water or divided-interest records. */
@@ -18,27 +25,8 @@ const SUMMARY_COLUMNS = `
   p.land_use                AS "landUse",
   p.acres::float8           AS acres,
   ST_X(p.label_point)       AS lng,
-  ST_Y(p.label_point)       AS lat`;
-
-export interface ParcelSummary {
-  id: number;
-  parcelNumber: string | null;
-  address: string | null;
-  city: string | null;
-  zip: string | null;
-  parcelType: string;
-  landUse: string | null;
-  acres: number | null;
-  lng: number;
-  lat: number;
-}
-
-export interface SearchResult {
-  query: string;
-  /** How the text was read, so the UI can show what was actually searched. */
-  interpretedAs: ParsedQuery;
-  results: ParcelSummary[];
-}
+  ST_Y(p.label_point)       AS lat,
+  ST_AsGeoJSON(p.geom, 6)::json AS geometry`;
 
 const MAX_RESULTS = 8;
 
@@ -102,13 +90,6 @@ export async function searchParcels(query: string): Promise<SearchResult> {
   return { query, interpretedAs: parsed, results: rows };
 }
 
-export interface AtResult {
-  /** Parcels under the point, smallest first (stacked condo units share one footprint). */
-  results: ParcelSummary[];
-  /** When nothing searchable is there, what the point landed on instead. */
-  surface: "parcel" | "right_of_way" | "rail" | "water" | "other" | "nothing";
-}
-
 export async function parcelsAt(lng: number, lat: number): Promise<AtResult> {
   const pool = db();
   const point = "ST_SetSRID(ST_MakePoint($1, $2), 4326)";
@@ -132,36 +113,6 @@ export async function parcelsAt(lng: number, lat: number): Promise<AtResult> {
       ? type
       : "nothing";
   return { results: [], surface };
-}
-
-export type OverlayStatus = "inside" | "partial" | "outside" | "boundary" | "not_loaded";
-
-export interface OverlayAnswer {
-  kind: "tif" | "qct" | "dda" | "oz" | "usda_rural" | "municipality" | "council_district";
-  status: OverlayStatus;
-  code: string | null;
-  name: string | null;
-  /** Share of the parcel's area inside, 0 to 1. */
-  share: number | null;
-  vintage: string | null;
-  boundaryBasis: string | null;
-  sourceKey: string;
-  pulledAt: string | null;
-  sourceLastEdit: string | null;
-}
-
-export interface ParcelDetail extends ParcelSummary {
-  accountNumber: string | null;
-  legalDescription: string | null;
-  yearBuilt: number | null;
-  assessedTotal: number | null;
-  landValue: number | null;
-  improvementValue: number | null;
-  geometry: unknown;
-  source: { publisher: string; pulledAt: string; sourceLastEdit: string | null };
-  overlays: OverlayAnswer[];
-  /** The five funding designations, in plain words. */
-  designations: { inAny: boolean; message: string };
 }
 
 const DESIGNATION_LABEL: Partial<Record<OverlayAnswer["kind"], string>> = {
@@ -211,7 +162,6 @@ export async function getParcel(id: number): Promise<ParcelDetail | null> {
             p.assessed_total::float8  AS "assessedTotal",
             p.land_value::float8      AS "landValue",
             p.improvement_value::float8 AS "improvementValue",
-            ST_AsGeoJSON(p.geom, 7)::json AS geometry,
             sp.publisher, sp.pulled_at AS "pulledAt", sp.source_last_edit AS "sourceLastEdit"
        FROM parcels p JOIN source_pulls sp ON sp.id = p.pull_id
       WHERE p.id = $1 AND ${SEARCHABLE}`,

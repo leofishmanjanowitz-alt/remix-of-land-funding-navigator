@@ -6,12 +6,12 @@ import { OVERLAY_KINDS, overlayGeoJson } from "@/server/overlays";
 export const Route = createFileRoute("/api/overlays/$kind")({
   server: {
     handlers: {
-      GET: ({ params }) =>
+      GET: ({ params, request }) =>
         handle(async () => {
           const data = await overlayGeoJson(params.kind);
           if (!data) return problem(404, `Unknown overlay. Available: ${OVERLAY_KINDS.join(", ")}`);
           // Boundaries change only when an ingest runs.
-          return json(data, { cache: "public, max-age=300" });
+          return json(data, { cache: "public, max-age=300", request });
         }),
     },
   },

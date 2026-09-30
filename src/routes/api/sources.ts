@@ -6,7 +6,8 @@ import { currentSources } from "@/server/overlays";
 export const Route = createFileRoute("/api/sources")({
   server: {
     handlers: {
-      GET: () => handle(async () => json({ sources: await currentSources() })),
+      GET: ({ request }) =>
+        handle(async () => json({ sources: await currentSources() }, { request })),
     },
   },
 });

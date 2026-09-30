@@ -11,7 +11,7 @@ export const Route = createFileRoute("/api/parcels/search")({
           const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
           if (q.length < 2) return problem(400, "Provide a search of at least 2 characters in ?q=");
           if (q.length > 120) return problem(400, "Search text is too long.");
-          return json(await searchParcels(q));
+          return json(await searchParcels(q), { request });
         }),
     },
   },

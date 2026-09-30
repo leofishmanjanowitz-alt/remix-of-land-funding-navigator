@@ -1,13 +1,25 @@
 /** Small helpers for the JSON API routes. */
+import { gzipSync } from "node:zlib";
 
-export function json(data: unknown, init: { status?: number; cache?: string } = {}): Response {
-  return new Response(JSON.stringify(data), {
-    status: init.status ?? 200,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": init.cache ?? "no-store",
-    },
-  });
+/** Bodies smaller than this are not worth compressing. */
+const GZIP_MIN_BYTES = 4096;
+
+export function json(
+  data: unknown,
+  init: { status?: number; cache?: string; request?: Request } = {},
+): Response {
+  const body = JSON.stringify(data);
+  const headers: Record<string, string> = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": init.cache ?? "no-store",
+    vary: "accept-encoding",
+  };
+  const acceptsGzip = /\bgzip\b/.test(init.request?.headers.get("accept-encoding") ?? "");
+  if (acceptsGzip && body.length >= GZIP_MIN_BYTES) {
+    headers["content-encoding"] = "gzip";
+    return new Response(new Uint8Array(gzipSync(body)), { status: init.status ?? 200, headers });
+  }
+  return new Response(body, { status: init.status ?? 200, headers });
 }
 
 export function problem(status: number, message: string): Response {
