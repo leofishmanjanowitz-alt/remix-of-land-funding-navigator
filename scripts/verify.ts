@@ -6,9 +6,15 @@
  *   npm run verify                                   # http://localhost:8080
  *   VERIFY_BASE_URL=http://localhost:8090 npm run verify
  *
+ * The last group drives headless Chrome (needs Google Chrome; VERIFY_SKIP_BROWSER=1 skips it) and
+ * checks that every map layer draws when switched on and is removed when switched off.
+ *
  * Exits non-zero if any check fails.
  */
 import assert from "node:assert/strict";
+import { overlayLines } from "../src/lib/overlay-text.ts";
+import { DISPLAY_LAYERS, OVERLAYS } from "../src/lib/overlays-meta.ts";
+import { findChrome, launchBrowser } from "./lib/cdp.ts";
 import type {
   OverlayAnswer,
   OverlayKind,
@@ -105,6 +111,38 @@ const checks: { name: string; run: () => Promise<void> }[] = [
     },
   },
   {
+    name: "18919 W WEKIWA RD S readout says it is not in a TIF district, QCT, DDA or OZ",
+    run: async () => {
+      const d = await detailFor("18919 W WEKIWA RD S", "18919 W Wekiwa Rd");
+      const text = overlayLines(d.overlays).map((l) => l.text);
+      for (const sentence of [
+        "Not in a TIF district.",
+        "Not in a Qualified Census Tract.",
+        "Not in a Difficult Development Area.",
+        "Not in an Opportunity Zone.",
+        "In a USDA rural-eligible area (outside USDA's ineligible areas).",
+      ]) {
+        assert.ok(
+          text.includes(sentence),
+          `readout is missing "${sentence}"; got ${JSON.stringify(text)}`,
+        );
+      }
+      // It is rural-eligible, so it is in one designation and the summary says which.
+      assert.equal(d.designations.message, "This parcel is in: USDA rural-eligible area.");
+    },
+  },
+  {
+    name: "305 E IMPERIAL ST S (Broken Arrow) → the plain 'in none of the five' message",
+    run: async () => {
+      const d = await detailFor("305 E IMPERIAL ST S", "305 E Imperial St", "80177740263420");
+      assert.equal(d.designations.inAny, false);
+      assert.equal(
+        d.designations.message,
+        "This parcel is not in a TIF district, Qualified Census Tract, Difficult Development Area, Opportunity Zone or USDA rural-eligible area.",
+      );
+    },
+  },
+  {
     name: "2645 E 5 ST S → search returns 7 parcels",
     run: async () => {
       const { results } = await search("2645 E 5th St");
@@ -187,15 +225,93 @@ const checks: { name: string; run: () => Promise<void> }[] = [
 ];
 
 console.log(`verify against ${BASE}\n`);
+let passed = 0;
 let failed = 0;
-for (const check of checks) {
+async function run(name: string, fn: () => Promise<void | string>) {
   try {
-    await check.run();
-    console.log(`PASS  ${check.name}`);
+    const detail = await fn();
+    passed++;
+    console.log(`PASS  ${name}${detail ? ` (${detail})` : ""}`);
   } catch (error) {
     failed++;
-    console.log(`FAIL  ${check.name}\n      ${(error as Error).message.split("\n")[0]}`);
+    console.log(`FAIL  ${name}\n      ${(error as Error).message.split("\n")[0]}`);
   }
 }
-console.log(`\n${checks.length - failed} passed, ${failed} failed`);
+
+for (const check of checks) await run(check.name, check.run);
+
+// ---------------------------------------------------------------------------------------------
+// Browser: every layer toggles on (drawn) and off (removed). Headless Chrome.
+// ---------------------------------------------------------------------------------------------
+if (process.env["VERIFY_SKIP_BROWSER"]) {
+  console.log("SKIP  browser layer-toggle checks (VERIFY_SKIP_BROWSER is set)");
+} else if (!findChrome()) {
+  failed++;
+  console.log(
+    "FAIL  browser layer-toggle checks\n      Chrome not found. Install Google Chrome, set CHROME_PATH, or set VERIFY_SKIP_BROWSER=1.",
+  );
+} else {
+  let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
+  try {
+    browser = await launchBrowser({ width: 1440, height: 900 });
+    // layers=none: every layer starts off, so each count below starts at zero.
+    await browser.goto(`${BASE}/map?layers=none`);
+    await browser.waitFor(
+      "!!document.querySelector('.leaflet-container') && document.querySelectorAll('label input[type=checkbox]').length >= 10",
+      60000,
+    );
+    await browser.sleep(1500);
+
+    const toggle = (label: string) =>
+      browser!.eval(
+        `(() => { const l = [...document.querySelectorAll('label')].find((x) => x.innerText.startsWith(${JSON.stringify(label)})); if (!l) throw new Error('no layer row: ${label}'); l.querySelector('input').click(); })()`,
+      );
+
+    // How many shapes of this layer are on the map right now.
+    const counter = {
+      // Database overlays are drawn in their own pane; the City's layers in Leaflet's default pane.
+      overlays: "document.querySelector('.leaflet-overlays-pane').querySelectorAll('path').length",
+      gis: "document.querySelector('.leaflet-overlay-pane').querySelectorAll('path').length",
+      tiles: "document.querySelectorAll('img.leaflet-tile[src*=\"fema.gov\"]').length",
+    };
+
+    for (const layer of [...OVERLAYS, ...DISPLAY_LAYERS]) {
+      const isOverlay = "group" in layer;
+      const where = isOverlay ? "overlays" : layer.tiles ? "tiles" : "gis";
+      await run(`layer toggles: ${layer.label}`, async () => {
+        const count = counter[where];
+        assert.equal(await browser!.eval(count), 0, "should start with nothing drawn");
+
+        // Database overlays must draw exactly the features the API serves.
+        const expected = isOverlay
+          ? (await api<{ features: unknown[] }>(`/api/overlays/${layer.key}`)).body.features.length
+          : null;
+
+        await toggle(layer.label);
+        await browser!.waitFor(
+          expected === null ? `${count} > 0` : `${count} === ${expected}`,
+          90000,
+        );
+        const drawn = await browser!.eval<number>(count);
+
+        await toggle(layer.label);
+        await browser!.waitFor(`${count} === 0`, 15000);
+        return `drew ${drawn} ${where === "tiles" ? "map tiles" : "shapes"}, then removed them`;
+      });
+    }
+
+    await run("no console errors while toggling layers", async () => {
+      assert.deepEqual(browser!.consoleErrors, []);
+    });
+  } catch (error) {
+    failed++;
+    console.log(
+      `FAIL  browser layer-toggle checks\n      ${(error as Error).message.split("\n")[0]}`,
+    );
+  } finally {
+    await browser?.close();
+  }
+}
+
+console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
