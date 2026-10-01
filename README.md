@@ -126,6 +126,8 @@ The INCOG service publishes no licence. Before a public launch, get written conf
 
 ### Verifying
 
-With the database loaded and the app running, `npm run verify` checks known parcels against the API (for example 112 S ELGIN AV E must be in TIF district T13 and an Opportunity Zone, and not in a QCT or DDA; 2645 E 5 ST S must return 7 parcels and be partly in a QCT and an Opportunity Zone). It prints PASS/FAIL per check and exits non-zero on any failure. `VERIFY_BASE_URL` points it at another server.
+With the database loaded and the app running, `npm run verify` checks known parcels against the API (for example 112 S ELGIN AV E must be in TIF district T13 and an Opportunity Zone, and not in a QCT or DDA; 2645 E 5 ST S must return 7 parcels and be partly in a QCT and an Opportunity Zone). It also drives headless Chrome to confirm every map layer draws when switched on and is removed when switched off (`VERIFY_SKIP_BROWSER=1` skips that). It prints PASS/FAIL per check and exits non-zero on any failure.
+
+`npm run bench` times 10 searches and 10 map clicks in headless Chrome, from the action to the parcel readout being on screen (`BENCH_BASE_URL` points it at another server). Both need Google Chrome (`CHROME_PATH` overrides its location). `VERIFY_BASE_URL` points it at another server.
 
 Feature plans from earlier development are in `docs/plans/`.
