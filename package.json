@@ -21,7 +21,7 @@
     "ingest:usda": "node --env-file=.env.local scripts/ingest/usda.ts",
     "ingest:oz": "node --env-file=.env.local scripts/ingest/oz.ts",
     "ingest:all": "npm run ingest:parcels && npm run ingest:municipalities && npm run ingest:council && npm run ingest:tif && npm run ingest:hud && npm run ingest:usda && npm run ingest:oz",
-    "verify": "node scripts/verify.ts",
+    "verify": "node --env-file-if-exists=.env.local scripts/verify.ts",
     "bench": "node scripts/bench.ts",
     "db:psql": "docker exec -it collective-impact-db psql -U collective -d collective_impact"
   },

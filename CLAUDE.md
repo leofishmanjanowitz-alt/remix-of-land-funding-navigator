@@ -29,9 +29,11 @@ npx tsc --noEmit -p . && npx tsc --noEmit -p scripts && npm run build
 - Both scripts need the app and database running and Google Chrome installed (`CHROME_PATH` overrides where
   it is). `VERIFY_BASE_URL` / `BENCH_BASE_URL` point them at another server, e.g. a production build:
   `npm run build && node .output/server/index.mjs` (with `DATABASE_URL` and `PORT` set).
+- `verify` reads `source_pulls` straight from the database, so `DATABASE_URL` must be set (`npm run verify` loads `.env.local`). `VERIFY_CHECK_LINKS=1` also requests every reference link.
 - `verify` asserts the known parcels (112 S ELGIN AV E, 320 N BOSTON AV E, 18919 W WEKIWA RD S, 2645 E 5 ST S,
-  305 E IMPERIAL ST S), the street-click and out-of-county cases, the readout wording, and that each of the ten
-  map layers draws when switched on and is removed when switched off. `VERIFY_SKIP_BROWSER=1` skips the browser part.
+  305 E IMPERIAL ST S), the street-click and out-of-county cases, the readout wording, that each of the ten
+  map layers draws when switched on and is removed when switched off, and that the References section matches
+  `source_pulls` (every source present, every link non-empty and equal to the stored one, every pull date correct). `VERIFY_SKIP_BROWSER=1` skips the browser part.
 - Local numbers for reference: searches and clicks take about 30 ms (production build) to 50 ms (dev) end to end.
 - Lint: `npm run lint` still reports ~160 prettier errors in untouched sample-data files under `src/lib`
   (and `tulsa-chat.ts`, deliberately left unformatted). Files written for the real-data work lint clean.
@@ -78,6 +80,9 @@ npx tsc --noEmit -p . && npx tsc --noEmit -p scripts && npm run build
 - **The real-parcel readout is geographies only.** No funding-program list, action plan or eligibility for real
   parcels. The program logic (`programsFromFacts`, `lib/real-facts.ts`) is kept but unused for them.
 - Reports are not rebuilt for real parcels: the button stays, with an explanation.
+- **References are generated from `source_pulls`** (via `/api/sources`): dataset, publisher, link, vintage, the
+  source's last-edit date and our pull date, for every source the readout uses. Never hand-write citations for real
+  data. The hand-written registry in `src/lib/citations.ts` is used only by the sample pages and the chat.
 - Layers that have no real source are not shown at all. The layer panel starts collapsed below 768 px and the
   legend below 640 px. Every layer must stay toggleable (`verify` checks this).
 

@@ -9,10 +9,15 @@
  * The last group drives headless Chrome (needs Google Chrome; VERIFY_SKIP_BROWSER=1 skips it) and
  * checks that every map layer draws when switched on and is removed when switched off.
  *
+ * The reference checks compare what the readout shows with source_pulls read straight from the
+ * database, so DATABASE_URL must be set (npm run verify loads .env.local). VERIFY_CHECK_LINKS=1
+ * also requests every reference link.
+ *
  * Exits non-zero if any check fails.
  */
 import assert from "node:assert/strict";
-import { overlayLines } from "../src/lib/overlay-text.ts";
+import pg from "pg";
+import { formatDate, overlayLines } from "../src/lib/overlay-text.ts";
 import { DISPLAY_LAYERS, OVERLAYS } from "../src/lib/overlays-meta.ts";
 import { findChrome, launchBrowser } from "./lib/cdp.ts";
 import type {
@@ -28,6 +33,29 @@ const BASE = (process.env["VERIFY_BASE_URL"] ?? "http://localhost:8080").replace
 async function api<T>(path: string): Promise<{ status: number; body: T }> {
   const res = await fetch(`${BASE}${path}`);
   return { status: res.status, body: (await res.json()) as T };
+}
+
+type PullRow = {
+  source_key: string;
+  source_url: string;
+  vintage: string | null;
+  pulled_at: Date;
+  source_last_edit: Date | null;
+};
+
+/** The current pull of every source, read directly from the database. */
+async function sourcePulls(): Promise<PullRow[]> {
+  const url = process.env["DATABASE_URL"];
+  assert.ok(url, "DATABASE_URL is not set (npm run verify loads it from .env.local)");
+  const pool = new pg.Pool({ connectionString: url, max: 1 });
+  try {
+    const res = await pool.query<PullRow>(
+      "SELECT source_key, source_url, vintage, pulled_at, source_last_edit FROM source_pulls WHERE is_current ORDER BY source_key",
+    );
+    return res.rows;
+  } finally {
+    await pool.end();
+  }
 }
 
 async function search(q: string): Promise<SearchResult> {
@@ -203,6 +231,38 @@ const checks: { name: string; run: () => Promise<void> }[] = [
     },
   },
   {
+    name: "/api/sources: every source has a non-empty https link and the pull date in source_pulls",
+    run: async () => {
+      const pulls = await sourcePulls();
+      const { body } = await api<{
+        sources: { sourceKey: string; sourceUrl: string; pulledAt: string }[];
+      }>("/api/sources");
+      assert.equal(
+        body.sources.length,
+        pulls.length,
+        "the API and source_pulls disagree on how many sources are current",
+      );
+      for (const row of pulls) {
+        const src = body.sources.find((x) => x.sourceKey === row.source_key);
+        assert.ok(src, `${row.source_key} is missing from /api/sources`);
+        assert.ok(
+          /^https:\/\/\S+$/.test(src.sourceUrl ?? ""),
+          `${row.source_key}: link is empty or not https`,
+        );
+        assert.equal(
+          src.sourceUrl,
+          row.source_url,
+          `${row.source_key}: link differs from source_pulls`,
+        );
+        assert.equal(
+          new Date(src.pulledAt).getTime(),
+          row.pulled_at.getTime(),
+          `${row.source_key}: pull date differs from source_pulls`,
+        );
+      }
+    },
+  },
+  {
     name: "all eight sources are loaded with a pull date",
     run: async () => {
       const { body } = await api<{ sources: { sourceKey: string; pulledAt: string }[] }>(
@@ -297,6 +357,93 @@ if (process.env["VERIFY_SKIP_BROWSER"]) {
         await toggle(layer.label);
         await browser!.waitFor(`${count} === 0`, 15000);
         return `drew ${drawn} ${where === "tiles" ? "map tiles" : "shapes"}, then removed them`;
+      });
+    }
+
+    // ---- References: generated from source_pulls, not hand-written ----
+    const pulls = await sourcePulls();
+    const parcel = (await search("112 S Elgin Ave")).results[0];
+    assert.ok(parcel, "112 S Elgin Ave not found");
+    await browser.goto(`${BASE}/map?parcel=${parcel.id}`);
+    await browser.waitFor("document.querySelectorAll('[data-reference]').length > 0", 60000);
+    await browser.sleep(1000);
+    type Shown = {
+      key: string;
+      href: string | null;
+      pulled: string | null;
+      pulledText: string | null;
+      lastEdit: string | null;
+      text: string;
+    };
+    const shown = await browser.eval<
+      Shown[]
+    >(`[...document.querySelectorAll('[data-reference]')].map((li) => ({
+      key: li.dataset.sourceKey,
+      href: li.querySelector('a')?.getAttribute('href') ?? null,
+      pulled: li.querySelector('time[data-kind=pulled]')?.getAttribute('datetime') ?? null,
+      pulledText: li.querySelector('time[data-kind=pulled]')?.textContent ?? null,
+      lastEdit: li.querySelector('time[data-kind=last-edit]')?.getAttribute('datetime') ?? null,
+      text: li.textContent,
+    }))`);
+
+    await run("references: one entry for every current source_pulls row", async () => {
+      assert.deepEqual(shown.map((r) => r.key).sort(), pulls.map((r) => r.source_key).sort());
+      return `${shown.length} sources`;
+    });
+    await run("references: every link is non-empty and is the source_pulls link", async () => {
+      for (const row of pulls) {
+        const r = shown.find((x) => x.key === row.source_key)!;
+        assert.ok(
+          r.href && /^https:\/\/\S+$/.test(r.href),
+          `${row.source_key}: link is empty or not https`,
+        );
+        assert.equal(r.href, row.source_url, `${row.source_key}: link differs from source_pulls`);
+      }
+    });
+    await run("references: every pull date matches source_pulls", async () => {
+      for (const row of pulls) {
+        const r = shown.find((x) => x.key === row.source_key)!;
+        assert.ok(r.pulled, `${row.source_key}: no pull date shown`);
+        assert.equal(
+          new Date(r.pulled).getTime(),
+          row.pulled_at.getTime(),
+          `${row.source_key}: pull date differs from source_pulls`,
+        );
+        assert.equal(
+          r.pulledText,
+          formatDate(row.pulled_at.toISOString()),
+          `${row.source_key}: shown date text is wrong`,
+        );
+        // The source's own last-edit date is shown only when source_pulls has one, and matches it.
+        assert.equal(
+          r.lastEdit ? new Date(r.lastEdit).getTime() : null,
+          row.source_last_edit ? row.source_last_edit.getTime() : null,
+          `${row.source_key}: last-edit date differs from source_pulls`,
+        );
+      }
+    });
+    await run("references: the hand-written assessor entries are gone", async () => {
+      const all = shown.map((r) => r.text).join(" ");
+      for (const old of [
+        "Parcel Record Search",
+        "2026 Assessment Roll",
+        "www.assessor.tulsacounty.org",
+      ]) {
+        assert.ok(!all.includes(old), `still shows "${old}"`);
+      }
+    });
+    if (process.env["VERIFY_CHECK_LINKS"]) {
+      await run("references: every link responds (VERIFY_CHECK_LINKS)", async () => {
+        for (const row of pulls) {
+          const res = await fetch(row.source_url, {
+            headers: { "user-agent": "Mozilla/5.0" },
+            signal: AbortSignal.timeout(30000),
+          });
+          assert.ok(
+            res.status < 400,
+            `${row.source_key}: ${row.source_url} returned HTTP ${res.status}`,
+          );
+        }
       });
     }
 
