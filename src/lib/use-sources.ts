@@ -4,6 +4,8 @@ export interface LoadedSource {
   sourceKey: string;
   datasetName: string;
   publisher: string;
+  /** Where the data was pulled from, as recorded in source_pulls. */
+  sourceUrl: string;
   vintage: string | null;
   boundaryBasis: string | null;
   pulledAt: string;

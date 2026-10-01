@@ -6,6 +6,7 @@ import { useParcelOutlines, type Viewport } from "@/lib/use-parcel-outlines";
 import { ApiError, getParcelDetail, parcelsAt, searchParcels } from "@/lib/parcel-api";
 import { formatDate } from "@/lib/overlay-text";
 import { ParcelSearchBox } from "@/components/parcel-search";
+import { SourceReferences } from "@/components/source-references";
 import { CandidateList } from "@/components/candidate-list";
 import { OverlayReadout, ParcelSourceLine } from "@/components/parcel-readout";
 import type {
@@ -36,7 +37,7 @@ import { TaskPanel } from "@/components/task-panel";
 import { ReportPreview } from "@/components/report-preview";
 import { PARCELS } from "@/lib/tulsa-map-data";
 import { INITIAL_TASKS, createTaskFromAction, type Task } from "@/lib/tasks";
-import { Cite, CitationScope, LevelFilterScope, ReferenceList } from "@/components/citation";
+import { Cite } from "@/components/citation";
 
 import { LayerControl } from "@/components/layer-control";
 import { MapLegend } from "@/components/map-legend";
@@ -608,87 +609,76 @@ function ParcelPanel({
   const place = [detail.city, "OK", detail.zip].filter(Boolean).join(" ");
 
   return (
-    <CitationScope ids={["assessor-record", "assessor-value"]}>
-      <LevelFilterScope value="all">
-        <div className="flex min-h-full flex-col">
-          <div className="border-b border-border px-6 py-5">
-            <div className="flex items-center justify-between gap-3">
-              <Link to="/" className="rule-label hover:text-accent">
-                ← Collective Impact
-              </Link>
-              <button onClick={onClear} className="rule-label hover:text-accent">
-                Clear ✕
-              </button>
-            </div>
-            <h1 className="mt-3 font-heading font-bold text-2xl leading-snug text-foreground">
-              {address}
-            </h1>
-            <p className="text-sm text-muted-foreground">{place}</p>
-          </div>
-
-          <Section title="Where this parcel sits">
-            <OverlayReadout detail={detail} />
-          </Section>
-
-          <Section title="Parcel facts">
-            <dl className="divide-y divide-border border-y border-border">
-              <Fact label="Address" value={address} citeId="assessor-record" />
-              <Fact
-                label="Parcel number"
-                value={detail.parcelNumber ?? "—"}
-                mono
-                citeId="assessor-record"
-              />
-              {detail.accountNumber && <Fact label="Account" value={detail.accountNumber} mono />}
-              <Fact
-                label="Acreage"
-                value={detail.acres !== null ? `${detail.acres.toFixed(2)} acres` : "—"}
-                citeId="assessor-record"
-              />
-              <Fact label="Land use" value={detail.landUse ?? "—"} />
-              {detail.yearBuilt && (
-                <Fact label="Year built" value={String(detail.yearBuilt)} mono />
-              )}
-              <Fact
-                label="Assessed value"
-                value={detail.assessedTotal !== null ? currency.format(detail.assessedTotal) : "—"}
-                mono
-                citeId="assessor-value"
-              />
-              {detail.landValue !== null && detail.improvementValue !== null && (
-                <Fact
-                  label="Of which"
-                  value={`land ${currency.format(detail.landValue)} · improvements ${currency.format(detail.improvementValue)}`}
-                />
-              )}
-            </dl>
-            {detail.legalDescription && (
-              <details className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                <summary className="cursor-pointer rule-label">Legal description</summary>
-                <p className="mt-2">{detail.legalDescription}</p>
-              </details>
-            )}
-            <ParcelSourceLine detail={detail} />
-          </Section>
-
-          <Section title="References">
-            <ReferenceList title="Sources cited in this panel" />
-          </Section>
-
-          <div className="mt-auto border-t border-border bg-paper-deep p-6">
-            <button
-              onClick={onGenerateReport}
-              className="w-full rounded-md border border-input bg-paper px-4 py-3.5 text-sm font-medium tracking-wide text-muted-foreground transition-colors hover:border-accent hover:text-accent"
-            >
-              Generate report for this parcel
+    <>
+      <div className="flex min-h-full flex-col">
+        <div className="border-b border-border px-6 py-5">
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/" className="rule-label hover:text-accent">
+              ← Collective Impact
+            </Link>
+            <button onClick={onClear} className="rule-label hover:text-accent">
+              Clear ✕
             </button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              Reports aren't available for real parcels yet.
-            </p>
           </div>
+          <h1 className="mt-3 font-heading font-bold text-2xl leading-snug text-foreground">
+            {address}
+          </h1>
+          <p className="text-sm text-muted-foreground">{place}</p>
         </div>
-      </LevelFilterScope>
-    </CitationScope>
+
+        <Section title="Where this parcel sits">
+          <OverlayReadout detail={detail} />
+        </Section>
+
+        <Section title="Parcel facts">
+          <dl className="divide-y divide-border border-y border-border">
+            <Fact label="Address" value={address} />
+            <Fact label="Parcel number" value={detail.parcelNumber ?? "—"} mono />
+            {detail.accountNumber && <Fact label="Account" value={detail.accountNumber} mono />}
+            <Fact
+              label="Acreage"
+              value={detail.acres !== null ? `${detail.acres.toFixed(2)} acres` : "—"}
+            />
+            <Fact label="Land use" value={detail.landUse ?? "—"} />
+            {detail.yearBuilt && <Fact label="Year built" value={String(detail.yearBuilt)} mono />}
+            <Fact
+              label="Assessed value"
+              value={detail.assessedTotal !== null ? currency.format(detail.assessedTotal) : "—"}
+              mono
+            />
+            {detail.landValue !== null && detail.improvementValue !== null && (
+              <Fact
+                label="Of which"
+                value={`land ${currency.format(detail.landValue)} · improvements ${currency.format(detail.improvementValue)}`}
+              />
+            )}
+          </dl>
+          {detail.legalDescription && (
+            <details className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              <summary className="cursor-pointer rule-label">Legal description</summary>
+              <p className="mt-2">{detail.legalDescription}</p>
+            </details>
+          )}
+          <ParcelSourceLine detail={detail} />
+        </Section>
+
+        <Section title="References">
+          <SourceReferences />
+        </Section>
+
+        <div className="mt-auto border-t border-border bg-paper-deep p-6">
+          <button
+            onClick={onGenerateReport}
+            className="w-full rounded-md border border-input bg-paper px-4 py-3.5 text-sm font-medium tracking-wide text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+          >
+            Generate report for this parcel
+          </button>
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Reports aren't available for real parcels yet.
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
 

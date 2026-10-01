@@ -86,6 +86,7 @@ export async function overlayGeoJson(kind: string): Promise<unknown | null> {
 export async function currentSources(): Promise<unknown[]> {
   const res = await db().query(
     `SELECT source_key AS "sourceKey", dataset_name AS "datasetName", publisher,
+            source_url AS "sourceUrl",
             COALESCE(vintage, to_char(source_last_edit AT TIME ZONE 'UTC', 'YYYY-MM-DD')) AS vintage,
             boundary_basis AS "boundaryBasis", pulled_at AS "pulledAt",
             source_last_edit AS "sourceLastEdit", record_count AS "recordCount", license_note AS "licenseNote"
