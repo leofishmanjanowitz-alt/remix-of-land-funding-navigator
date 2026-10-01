@@ -108,7 +108,7 @@ export async function launchBrowser(
       result?: unknown;
       error?: unknown;
       method?: string;
-      params?: Record<string, any>;
+      params?: Record<string, unknown>;
     };
     if (msg.id !== undefined && pending.has(msg.id)) {
       const p = pending.get(msg.id)!;
