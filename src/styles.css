@@ -131,6 +131,11 @@
   --layer-nco: oklch(0.5 0.09 45);
   --layer-hp: oklch(0.45 0.11 15);
 
+  /* Real overlays served from PostGIS */
+  --layer-usda-out: oklch(0.5 0.04 60);
+  --layer-muni: oklch(0.42 0.04 250);
+  --layer-council: oklch(0.5 0.1 95);
+
   --sidebar: oklch(0.968 0.005 229);
   --sidebar-foreground: oklch(0.278 0.03 257);
   --sidebar-primary: oklch(0.79 0.058 213);
@@ -219,4 +224,20 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted-foreground);
+}
+
+/* Numbered badges on candidate parcels while a pick list is open */
+.leaflet-tooltip.candidate-number {
+  min-width: 1.5rem;
+  padding: 1px 6px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 700;
+  text-align: center;
+  box-shadow: none;
+}
+.leaflet-tooltip.candidate-number::before {
+  display: none;
 }

@@ -4,18 +4,17 @@
  * Browser-only: this module statically imports Leaflet, so it must be loaded
  * lazily behind <ClientOnly> (see src/routes/map.tsx).
  *
- * The existing parcel/overlay artwork is drawn in a 1200x800 coordinate space.
- * It is projected onto a fixed Tulsa bounding box with an L.svgOverlay, so the
- * drawing pans and zooms in lockstep with the tiles underneath.
+ * Everything drawn on it is real geometry in latitude/longitude: overlays and parcel
+ * outlines served from the database, plus the City of Tulsa's display-only layers.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { GIS_SOURCES, type GeoJsonFeatureCollection, type GisLayerId } from "@/lib/tulsa-gis";
-
-export const VIEW_W = 1200;
-export const VIEW_H = 800;
+import type { OutlineCollection, PolygonGeometry } from "@/lib/parcel-types";
+import type { Viewport } from "@/lib/use-parcel-outlines";
+import type { OverlayMeta } from "@/lib/overlays-meta";
+import type { OverlayCollection } from "@/lib/use-overlays";
 
 /** Downtown / north Tulsa. Aspect ratio chosen to match the 3:2 drawing. */
 const SW: [number, number] = [36.118, -96.052];
@@ -24,6 +23,11 @@ const BOUNDS = L.latLngBounds(SW, NE);
 
 const FEMA_WMS = "https://hazards.fema.gov/arcgis/services/public/NFHL/MapServer/WMSServer";
 
+export interface OverlayRender {
+  meta: OverlayMeta;
+  data: OverlayCollection;
+}
+
 export interface GeoLayerRender {
   id: GisLayerId;
   data: GeoJsonFeatureCollection;
@@ -31,18 +35,18 @@ export interface GeoLayerRender {
   color: string;
 }
 
-/** Selected parcel, in the 1200x800 drawing space. */
-export interface FocusTarget {
-  id: string;
-  points: [number, number][];
+/** The selected parcel: its real outline and a label for the tooltip. */
+export interface SelectedParcel {
+  id: number;
+  geometry: PolygonGeometry;
   label: string;
 }
 
-/** Drawing space -> lat/lng, matching the L.svgOverlay projection onto BOUNDS. */
-function toLatLng([x, y]: [number, number]): [number, number] {
-  const lng = SW[1] + (x / VIEW_W) * (NE[1] - SW[1]);
-  const lat = NE[0] - (y / VIEW_H) * (NE[0] - SW[0]);
-  return [lat, lng];
+/** A parcel in an open pick list, numbered to match the list. */
+export interface CandidateParcel {
+  id: number;
+  n: number;
+  geometry: PolygonGeometry;
 }
 
 /** Leaflet writes SVG presentation attributes, which do not resolve var(). */
@@ -60,44 +64,78 @@ function escapeHtml(value: string): string {
   );
 }
 
+/** Leave room for the layer panel on the left and the search box along the top. */
+function framing(map: L.Map): L.FitBoundsOptions {
+  const wide = map.getSize().x > 900;
+  return {
+    paddingTopLeft: L.point(wide ? 340 : 24, 80),
+    paddingBottomRight: L.point(24, 48),
+  };
+}
+
 export function BaseMap({
   femaFloodplain,
   geoLayers = [],
-  focus = null,
-  children,
+  selected = null,
+  candidates = [],
+  highlightId = null,
+  onMapClick,
+  onSelectCandidate,
+  parcelOutlines = null,
+  overlays = [],
+  onViewportChange,
 }: {
   femaFloodplain: boolean;
   geoLayers?: GeoLayerRender[];
-  focus?: FocusTarget | null;
-  children: React.ReactNode;
+  selected?: SelectedParcel | null;
+  candidates?: CandidateParcel[];
+  highlightId?: number | null;
+  /** A click on empty map (not on a candidate), with the zoom it happened at. */
+  onMapClick?: (lat: number, lng: number, zoom: number) => void;
+  onSelectCandidate?: (id: number) => void;
+  /** Real parcel outlines for the current view (street level only). */
+  parcelOutlines?: OutlineCollection | null;
+  /** Overlays served from the database, already filtered to the ones switched on. */
+  overlays?: OverlayRender[];
+  onViewportChange?: (viewport: Viewport) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const femaRef = useRef<L.TileLayer.WMS | null>(null);
-  const focusRef = useRef<L.Polygon | null>(null);
+  const selectedRef = useRef<L.GeoJSON | null>(null);
+  const candidateRef = useRef<{ group: L.FeatureGroup; byId: Map<number, L.GeoJSON> } | null>(null);
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
+  const onSelectCandidateRef = useRef(onSelectCandidate);
+  onSelectCandidateRef.current = onSelectCandidate;
+  const outlineRef = useRef<L.GeoJSON | null>(null);
+  const outlineCanvasRef = useRef<L.Canvas | null>(null);
+  const overlayRef = useRef<Map<string, { layer: L.GeoJSON; data: OverlayCollection }>>(new Map());
+  const selectedId = selected?.id ?? null;
+  const selectedNow = useRef(selected);
+  selectedNow.current = selected;
+  const candidatesKey = candidates.map((c) => c.id).join(",");
+  const candidatesNow = useRef(candidates);
+  candidatesNow.current = candidates;
+  const onViewportRef = useRef(onViewportChange);
+  onViewportRef.current = onViewportChange;
   const geoRef = useRef<Map<string, { layer: L.GeoJSON; data: unknown }>>(new Map());
   // Incremented each time a Leaflet map instance is created, so layer effects
   // re-run after a remount (React StrictMode mounts effects twice in dev).
   const [epoch, setEpoch] = useState(0);
 
-  const svgEl = useMemo(() => {
-    const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    el.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
-    el.setAttribute("preserveAspectRatio", "none");
-    el.setAttribute("role", "img");
-    el.setAttribute("aria-label", "Parcel map of Tulsa, Oklahoma");
-    return el;
-  }, []);
-
   useEffect(() => {
     const host = hostRef.current;
     if (!host || mapRef.current) return;
+    // The stores never change identity; hold them so cleanup does not read a moved ref.
+    const geoStore = geoRef.current;
+    const overlayStore = overlayRef.current;
 
     const map = L.map(host, {
       zoomControl: false,
       attributionControl: true,
       minZoom: 11,
-      maxZoom: 18,
+      maxZoom: 19,
     });
     map.fitBounds(BOUNDS);
 
@@ -107,22 +145,51 @@ export function BaseMap({
       maxZoom: 19,
     }).addTo(map);
 
-    L.svgOverlay(svgEl, BOUNDS, { interactive: true, className: "parcel-overlay" }).addTo(map);
+    // Panes keep parcel outlines above the overlays and below the selected parcel.
+    map.createPane("overlays").style.zIndex = "410";
+    map.createPane("parcelOutlines").style.zIndex = "420";
+    map.createPane("candidates").style.zIndex = "430";
+    map.createPane("selection").style.zIndex = "440";
+    map.on("click", (e: L.LeafletMouseEvent) =>
+      onMapClickRef.current?.(e.latlng.lat, e.latlng.lng, map.getZoom()),
+    );
 
     mapRef.current = map;
     setEpoch((n) => n + 1);
 
+    // Report the visible area (debounced) so the page can load outlines for it.
+    let timer: number | undefined;
+    const report = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const b = map.getBounds();
+        // Exposed for end-to-end checks.
+        host.dataset["zoom"] = String(map.getZoom());
+        onViewportRef.current?.({
+          bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+          zoom: map.getZoom(),
+        });
+      }, 200);
+    };
+    map.on("moveend", report);
+    report();
+
     const resize = () => map.invalidateSize();
     window.addEventListener("resize", resize);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener("resize", resize);
       map.remove();
       mapRef.current = null;
-      geoRef.current.clear();
+      geoStore.clear();
       femaRef.current = null;
-      focusRef.current = null;
+      selectedRef.current = null;
+      candidateRef.current = null;
+      outlineRef.current = null;
+      outlineCanvasRef.current = null;
+      overlayStore.clear();
     };
-  }, [svgEl]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -174,9 +241,11 @@ export function BaseMap({
           const props = (feature.properties ?? {}) as Record<string, unknown>;
           const title = escapeHtml(src.label(props));
           const detail = src.detail?.(props);
-          lyr.bindPopup(
+          // A hover tooltip, not a click popup: a click must still select the parcel beneath.
+          lyr.bindTooltip(
             `<strong>${title}</strong>${detail ? `<br/>${escapeHtml(detail)}` : ""}` +
-              `<br/><span style="opacity:.7">${escapeHtml(src.attribution)}</span>`,
+              `<br/><span style="opacity:.7">${escapeHtml(src.attribution)} · display only</span>`,
+            { sticky: true },
           );
         },
       });
@@ -190,35 +259,149 @@ export function BaseMap({
     if (added) requestAnimationFrame(() => map.invalidateSize());
   }, [geoLayers, epoch]);
 
-  // Highlight and fly to the selected parcel.
+  // Overlays from the database (display geometry), diffed by kind.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const store = overlayRef.current;
+    const wanted = new Map(overlays.map((o) => [o.meta.key, o]));
 
-    if (focusRef.current) {
-      map.removeLayer(focusRef.current);
-      focusRef.current = null;
+    for (const [key, entry] of store) {
+      if (wanted.get(key as OverlayMeta["key"])?.data !== entry.data) {
+        map.removeLayer(entry.layer);
+        store.delete(key);
+      }
     }
-    if (!focus || focus.points.length < 3) return;
+    for (const { meta, data } of overlays) {
+      if (store.has(meta.key)) continue;
+      const color = resolveColor(meta.color);
+      const layer = L.geoJSON(data as unknown as GeoJSON.GeoJsonObject, {
+        pane: "overlays",
+        interactive: false,
+        style: () => ({
+          color,
+          weight: meta.fill ? 1.5 : 2.5,
+          opacity: 0.9,
+          fill: meta.fill,
+          fillColor: color,
+          fillOpacity: 0.14,
+          ...(meta.dash ? { dashArray: meta.dash } : {}),
+        }),
+      });
+      layer.addTo(map);
+      // Filled areas sit underneath; outline-only boundaries stay readable on top.
+      if (meta.fill) layer.bringToBack();
+      else layer.bringToFront();
+      store.set(meta.key, { layer, data });
+    }
+  }, [overlays, epoch]);
+
+  // Real parcel outlines for the current view, drawn on a canvas (thousands of polygons).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (outlineRef.current) {
+      map.removeLayer(outlineRef.current);
+      outlineRef.current = null;
+    }
+    if (!parcelOutlines || parcelOutlines.features.length === 0) return;
+
+    const color = resolveColor("var(--foreground)");
+    // One canvas for the life of the map; a new one per update would leak elements.
+    const canvas = (outlineCanvasRef.current ??= L.canvas({
+      padding: 0.3,
+      pane: "parcelOutlines",
+    }));
+    const layer = L.geoJSON(parcelOutlines as unknown as GeoJSON.GeoJsonObject, {
+      pane: "parcelOutlines",
+      interactive: false,
+      style: () => ({ renderer: canvas, color, weight: 1, opacity: 0.5, fill: false }),
+    });
+    layer.addTo(map);
+    outlineRef.current = layer;
+  }, [parcelOutlines, epoch]);
+
+  // The selected parcel: real outline, label, and a fly-to when the selection changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (selectedRef.current) {
+      map.removeLayer(selectedRef.current);
+      selectedRef.current = null;
+    }
+    const sel = selectedNow.current;
+    if (!sel) return;
 
     const color = resolveColor("var(--accent)");
-    const polygon = L.polygon(focus.points.map(toLatLng), {
-      color,
-      weight: 3,
-      fillColor: color,
-      fillOpacity: 0.25,
+    const layer = L.geoJSON(sel.geometry as unknown as GeoJSON.GeoJsonObject, {
+      pane: "selection",
+      interactive: false,
+      style: () => ({ color, weight: 3, fillColor: color, fillOpacity: 0.25 }),
     });
-    polygon.bindTooltip(focus.label, { permanent: true, direction: "top", opacity: 0.95 });
-    polygon.addTo(map);
-    focusRef.current = polygon;
+    layer.eachLayer((l) =>
+      l.bindTooltip(sel.label, { permanent: true, direction: "top", opacity: 0.95 }),
+    );
+    layer.addTo(map);
+    selectedRef.current = layer;
+    map.flyToBounds(layer.getBounds().pad(1.2), { ...framing(map), maxZoom: 18, duration: 0.8 });
+    // Re-run only when the selected parcel changes, not on every parent render.
+  }, [selectedId, epoch]);
 
-    map.flyToBounds(polygon.getBounds().pad(1.5), { maxZoom: 17, duration: 0.8 });
-  }, [focus, epoch]);
+  // Pick-list candidates: numbered dashed outlines, clickable, framed together.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (candidateRef.current) {
+      map.removeLayer(candidateRef.current.group);
+      candidateRef.current = null;
+    }
+    const list = candidatesNow.current;
+    if (list.length === 0) return;
+
+    const color = resolveColor("var(--accent)");
+    const group = L.featureGroup();
+    const byId = new Map<number, L.GeoJSON>();
+    for (const c of list) {
+      const poly = L.geoJSON(c.geometry as unknown as GeoJSON.GeoJsonObject, {
+        pane: "candidates",
+        style: () => ({ color, weight: 2, dashArray: "5 4", fillColor: color, fillOpacity: 0.12 }),
+      });
+      poly.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        onSelectCandidateRef.current?.(c.id);
+      });
+      poly.eachLayer((l) =>
+        l.bindTooltip(String(c.n), {
+          permanent: true,
+          direction: "center",
+          className: "candidate-number",
+        }),
+      );
+      poly.addTo(group);
+      byId.set(c.id, poly);
+    }
+    group.addTo(map);
+    candidateRef.current = { group, byId };
+    map.flyToBounds(group.getBounds().pad(0.6), { ...framing(map), maxZoom: 18, duration: 0.6 });
+  }, [candidatesKey, epoch]);
+
+  // Hovering a pick-list row emphasises its outline.
+  useEffect(() => {
+    const store = candidateRef.current;
+    if (!store) return;
+    const color = resolveColor("var(--accent)");
+    for (const [id, layer] of store.byId) {
+      layer.setStyle(
+        id === highlightId
+          ? { color, weight: 4, dashArray: undefined, fillOpacity: 0.3 }
+          : { color, weight: 2, dashArray: "5 4", fillOpacity: 0.12 },
+      );
+    }
+  }, [highlightId, candidatesKey, epoch]);
 
   return (
     <div className="absolute inset-0">
       <div ref={hostRef} className="h-full w-full bg-paper-deep" />
-      {createPortal(children, svgEl)}
 
       <div className="absolute bottom-3 right-3 z-[500] flex flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-card">
         <button

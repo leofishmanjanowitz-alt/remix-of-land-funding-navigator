@@ -1,113 +1,73 @@
 import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
-import { GIS_LAYER_IDS, fetchGisLayer, type GisStatus } from "@/lib/tulsa-gis";
+import { useQuery } from "@tanstack/react-query";
+import type { GisStatus } from "@/lib/tulsa-gis";
+import { useParcelOutlines, type Viewport } from "@/lib/use-parcel-outlines";
+import { ApiError, getParcelDetail, parcelsAt, searchParcels } from "@/lib/parcel-api";
+import { formatDate } from "@/lib/overlay-text";
+import { ParcelSearchBox } from "@/components/parcel-search";
+import { SourceReferences } from "@/components/source-references";
+import { CandidateList } from "@/components/candidate-list";
+import { OverlayReadout, ParcelSourceLine } from "@/components/parcel-readout";
+import type {
+  OutlineCollection,
+  ParcelDetail,
+  ParcelSummary,
+  SearchResult,
+  SurfaceKind,
+} from "@/lib/parcel-types";
+import { useOverlays } from "@/lib/use-overlays";
+import { useDisplayLayers } from "@/lib/use-display-layers";
+import { useSources } from "@/lib/use-sources";
+import {
+  OVERLAYS,
+  OVERLAY_BY_KEY,
+  layersFromParam,
+  type LayerKey,
+  type LayerState,
+} from "@/lib/overlays-meta";
+import type {
+  CandidateParcel,
+  GeoLayerRender,
+  OverlayRender,
+  SelectedParcel,
+} from "@/components/basemap";
 import { ParcelChat } from "@/components/parcel-chat";
 import { TaskPanel } from "@/components/task-panel";
 import { ReportPreview } from "@/components/report-preview";
-import {
-  LAYERS,
-  PARCELS,
-  ZONING,
-  programsFor,
-  type LayerId,
-  type Parcel,
-  type ProgramStatus,
-} from "@/lib/tulsa-map-data";
-import { INITIAL_TASKS, createManualTask, createTaskFromAction, type Task } from "@/lib/tasks";
-import { zoningSourceIds } from "@/lib/citations";
-import { DisbursementDetail } from "@/components/disbursement";
-import { ContactBlock } from "@/components/contact-block";
-import { ComplexityNote } from "@/components/complexity";
-import { AssistanceInterest } from "@/components/assistance-request";
-import { contactForProgram } from "@/lib/contacts";
-import {
-  Cite,
-  CiteStack,
-  CitationScope,
-  CoverageBar,
-  CoverageLegend,
-  LevelFilterControl,
-  LevelFilterScope,
-  ReferenceList,
-  type LevelFilterValue,
-} from "@/components/citation";
-import {
-  FundingViewTabs,
-  ResidentAssistance,
-  RESIDENT_CITATION_IDS,
-  type FundingView,
-} from "@/components/resident-assistance";
+import { PARCELS } from "@/lib/tulsa-map-data";
+import { INITIAL_TASKS, createTaskFromAction, type Task } from "@/lib/tasks";
+import { Cite } from "@/components/citation";
 
-import { PROGRAM_COVERAGE, PROGRAM_REQUIREMENTS } from "@/lib/jurisdictions";
-import {
-  LayerControl,
-  choroplethColor,
-  choroplethRange,
-  meetsThreshold,
-} from "@/components/layer-control";
-import {
-  LAYER_CITATIONS,
-  MFI_THRESHOLD,
-  POVERTY_THRESHOLD,
-  RENT_EFFECTIVE_YEAR,
-  TRACTS,
-  UNEMPLOYMENT_BENCHMARK,
-  ZIP_AREAS,
-  nmtcEligible,
-  nmtcTestsMet,
-  tractFor,
-  tractValue,
-  zipValue,
-  type ChoroplethId,
-} from "@/lib/census-layers";
-import type { UnitSize } from "@/lib/underwriting";
-import { UnderwritingLimits } from "@/components/underwriting";
-import { UNDERWRITING_CITATIONS } from "@/lib/underwriting";
-import { CostSavers } from "@/components/cost-savers";
-import { OrgFitNote, OrgProfilePrompt, StatusGates } from "@/components/org-status";
-import { ORG_CITATION_IDS, CHDO_ROUTE_COPY, chdoRouteFor, type OrgType } from "@/lib/org-status";
-import { COST_SAVER_CITATION_IDS } from "@/lib/cost-savers";
-import { groupByTier, type AccessAssessment } from "@/lib/accessibility";
-import {
-  AccessModelLine,
-  AccessPath,
-  AssumedOrgNote,
-  EffortVsAward,
-  RelationshipSources,
-  TierHeading,
-  WhyNotTierOne,
-} from "@/components/accessibility";
-
-import {
-  ActionPlanView,
-  LockedPlan,
-  PlanUpgradeCard,
-  ProgramSelector,
-  type AddTaskInput,
-} from "@/components/action-plan";
-import { ALL_PLAN_CITATION_IDS, actionPlanFor, chdoPlanFor } from "@/lib/action-plans";
+import { LayerControl } from "@/components/layer-control";
+import { MapLegend } from "@/components/map-legend";
 
 export const Route = createFileRoute("/map")({
-  validateSearch: (search: Record<string, unknown>): { parcel?: string; report?: boolean } => {
-    const out: { parcel?: string; report?: boolean } = {};
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { parcel?: string; report?: boolean; q?: string; layers?: string } => {
+    const out: { parcel?: string; report?: boolean; q?: string; layers?: string } = {};
+    if (typeof search["layers"] === "string") out.layers = search["layers"];
+    // A number is a real parcel id; anything else is a sample id from the prototype dashboard.
     if (typeof search["parcel"] === "string") out.parcel = search["parcel"];
+    else if (typeof search["parcel"] === "number") out.parcel = String(search["parcel"]);
+    if (typeof search["q"] === "string" && search["q"].trim()) out.q = search["q"].trim();
     if (search["report"] === true || search["report"] === "true") out.report = true;
     return out;
   },
 
   head: () => ({
     meta: [
-      { title: "Parcel map — Tulsa, Oklahoma | Collective Impact" },
+      { title: "Parcel map — Tulsa County, Oklahoma | Collective Impact" },
       {
         name: "description",
         content:
-          "Select a Tulsa parcel to see zoning, boundary overlays, and which federal, state, and local housing programs it qualifies for.",
+          "Search a Tulsa County address or click a parcel to see which TIF district, census tract, Difficult Development Area, Opportunity Zone, USDA area, city and council district it sits in.",
       },
       { property: "og:title", content: "Parcel funding map — Tulsa, Oklahoma" },
       {
         property: "og:description",
-        content: "Zoning, overlays, and funding eligibility for individual parcels.",
+        content: "Which boundary overlays a Tulsa County parcel sits in.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -122,39 +82,71 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+interface CandidateSet {
+  title: string;
+  hint: string;
+  results: ParcelSummary[];
+}
+
+const SURFACE_MESSAGE: Record<Exclude<SurfaceKind, "parcel">, string> = {
+  right_of_way: "That's a street or right-of-way, not a parcel.",
+  rail: "That's a rail corridor, not a parcel.",
+  water: "That's a river or other water body, not a parcel.",
+  other: "That area is a divided-interest record, which isn't selectable as a parcel.",
+  nothing: "No parcel here. The parcel data covers Tulsa County.",
+};
+
+/** Street level and closer, where a click lands on one lot rather than a neighbourhood. */
+const CLICK_MIN_ZOOM = 15;
+
 function MapPage() {
   const search = Route.useSearch();
-  const initialParcel = search.parcel
-    ? (PARCELS.find((p) => p.id === search.parcel) ?? PARCELS[6] ?? null)
-    : (PARCELS[6] ?? null);
-  const [selected, setSelected] = useState<Parcel | null>(initialParcel);
+  const numericParcel = search.parcel && /^\d+$/.test(search.parcel) ? Number(search.parcel) : null;
+  // The prototype dashboard links here with sample ids; those are not real records.
+  const sampleParcel =
+    search.parcel && numericParcel === null
+      ? (PARCELS.find((p) => p.id === search.parcel) ?? null)
+      : null;
+
+  const [selectedId, setSelectedId] = useState<number | null>(numericParcel);
+  const [candidates, setCandidates] = useState<CandidateSet | null>(null);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+
   // Layer selections live here, above the parcel, so they persist as the user
-  // moves between parcels.
-  const [active, setActive] = useState<Record<LayerId, boolean>>({
-    tif: true,
-    "tif-36th": false,
-    zoning: false,
-    qct: true,
-    dda: false,
-    usda: false,
-    fema: true,
-    oz: false,
-    nmtc: false,
-    district1: false,
-    htf: false,
-    nio: false,
-    nco: false,
-    hp: false,
-  });
-  const [choropleth, setChoropleth] = useState<ChoroplethId | null>(null);
-  const [unit, setUnit] = useState<UnitSize>("2br");
+  // moves between parcels. ?layers=all (or a comma list) switches them on from a link.
+  const [layers, setLayers] = useState<LayerState>(() => layersFromParam(search.layers));
+  const toggleLayer = useCallback(
+    (key: LayerKey) => setLayers((s) => ({ ...s, [key]: !s[key] })),
+    [],
+  );
   const [chatOpen, setChatOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [tasksOpen, setTasksOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(Boolean(search.report && initialParcel));
-  const [orgType, setOrgType] = useState<OrgType | null>(null);
-  const [chdoDesignated, setChdoDesignated] = useState(false);
-  const [gisStatus, setGisStatus] = useState<Record<string, GisStatus>>({});
+  const [reportOpen, setReportOpen] = useState(Boolean(search.report && sampleParcel));
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const outlines = useParcelOutlines(viewport);
+
+  // Overlays from the database: only the ones switched on are fetched.
+  const overlayLoads = useOverlays(OVERLAYS.filter((o) => layers[o.key]).map((o) => o.key));
+  const overlays: OverlayRender[] = overlayLoads.flatMap((o) =>
+    o.status === "ready" ? [{ meta: OVERLAY_BY_KEY[o.kind], data: o.data }] : [],
+  );
+  // City floodplains and zoning: display only, straight from the City's service.
+  const display = useDisplayLayers(layers);
+  const layerStatus: Partial<Record<string, GisStatus>> = { ...display.status };
+  for (const o of overlayLoads) if (o.status !== "ready") layerStatus[o.kind] = o.status;
+
+  const detailQuery = useQuery({
+    queryKey: ["parcel", selectedId],
+    queryFn: ({ signal }) => getParcelDetail(selectedId!, signal),
+    enabled: selectedId !== null,
+    staleTime: 10 * 60 * 1000,
+    // A missing or malformed id will not fix itself; only retry server trouble.
+    retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 2,
+  });
+  const detail = selectedId !== null ? (detailQuery.data ?? null) : null;
 
   const openTaskCount = tasks.filter((t) => !t.completed).length;
 
@@ -166,19 +158,182 @@ function MapPage() {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   }, []);
 
-  const toggle = (id: LayerId) => setActive((s) => ({ ...s, [id]: !s[id] }));
+  // Keep the address bar in step so a selection can be shared. Written straight to history:
+  // the router would quote a numeric id ("31990") and re-render the whole page.
+  const setUrl = useCallback((next: { parcel?: string }) => {
+    const params = new URLSearchParams(window.location.search);
+    if (next.parcel) params.set("parcel", next.parcel);
+    else params.delete("parcel");
+    params.delete("q"); // a search link is used up once its search has run
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  }, []);
+
+  const selectParcel = useCallback(
+    (id: number) => {
+      setSelectedId(id);
+      setCandidates(null);
+      setHighlightId(null);
+      setNotice(null);
+      setUrl({ parcel: String(id) });
+    },
+    [setUrl],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedId(null);
+    setCandidates(null);
+    setUrl({});
+  }, [setUrl]);
+
+  const showCandidates = useCallback(
+    (set: CandidateSet) => {
+      setSelectedId(null);
+      setNotice(null);
+      setCandidates(set);
+      setUrl({});
+    },
+    [setUrl],
+  );
+
+  // One place decides what a search result means, for the search box and the chat alike:
+  // one parcel is selected, several open a pick list, none says so. Never auto-select among several.
+  const applySearchResults = useCallback(
+    (q: string, res: SearchResult) => {
+      if (res.results.length === 0) {
+        setCandidates(null);
+        const kind = res.interpretedAs.kind;
+        setNotice(
+          kind === "parcel_number" || kind === "account_number"
+            ? `No parcel in Tulsa County has the number “${q}”.`
+            : res.interpretedAs.kind === "address" && res.interpretedAs.houseNumber === null
+              ? `No addresses found on “${q}”. Check the spelling, or add a house number.`
+              : `No parcel found at “${q}”. Check the spelling, or search the street name alone to list its addresses.`,
+        );
+      } else if (res.results.length === 1) {
+        selectParcel(res.results[0]!.id);
+      } else {
+        showCandidates({
+          title: `${res.results.length} parcels match “${q}”`,
+          hint: "Choose one. Their outlines are numbered on the map.",
+          results: res.results,
+        });
+      }
+    },
+    [selectParcel, showCandidates],
+  );
+
+  const searchSeq = useRef(0);
+  const runSearch = useCallback(
+    async (text: string) => {
+      const q = text.trim();
+      if (q.length < 2) {
+        setNotice("Type at least 2 characters to search.");
+        return;
+      }
+      const seq = ++searchSeq.current;
+      setSearching(true);
+      setNotice(null);
+      try {
+        const res = await searchParcels(q);
+        if (seq !== searchSeq.current) return;
+        applySearchResults(q, res);
+      } catch (error) {
+        if (seq !== searchSeq.current) return;
+        setNotice(error instanceof ApiError ? error.message : "Search is not available right now.");
+      } finally {
+        if (seq === searchSeq.current) setSearching(false);
+      }
+    },
+    [applySearchResults],
+  );
+
+  const handleMapClick = useCallback(
+    async (lat: number, lng: number, zoom: number) => {
+      if (zoom < CLICK_MIN_ZOOM) {
+        setNotice("Zoom in to street level to click a parcel, or use the search box.");
+        return;
+      }
+      try {
+        const res = await parcelsAt(lat, lng);
+        if (res.results.length === 1) selectParcel(res.results[0]!.id);
+        else if (res.results.length > 1) {
+          showCandidates({
+            title: `${res.results.length} parcels at this spot`,
+            hint: "Several parcels share this footprint, for example stacked condominium units. Choose one.",
+            results: res.results,
+          });
+        } else {
+          setNotice(SURFACE_MESSAGE[res.surface === "parcel" ? "nothing" : res.surface]);
+        }
+      } catch (error) {
+        setNotice(
+          error instanceof ApiError ? error.message : "That lookup is not available right now.",
+        );
+      }
+    },
+    [selectParcel, showCandidates],
+  );
+
+  // A shared link may carry a search (?q=) to run on arrival.
+  const ranInitialSearch = useRef(false);
+  useEffect(() => {
+    if (ranInitialSearch.current || !search.q) return;
+    ranInitialSearch.current = true;
+    void runSearch(search.q);
+  }, [search.q, runSearch]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(null), 9000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
+  const selected = useMemo(
+    () =>
+      detail
+        ? {
+            id: detail.id,
+            geometry: detail.geometry,
+            label: detail.address ?? detail.parcelNumber ?? "Parcel",
+          }
+        : null,
+    [detail],
+  );
+  const candidateParcels = useMemo(
+    () =>
+      candidates
+        ? candidates.results.map((r, i) => ({ id: r.id, n: i + 1, geometry: r.geometry }))
+        : [],
+    [candidates],
+  );
+
+  const reportUnavailable = useCallback(
+    () =>
+      setNotice(
+        "Reports aren't available for real parcels yet: they need zoning, which isn't part of the parcel check. Floodplain and zoning are shown on the map as display-only layers.",
+      ),
+    [],
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:h-screen lg:flex-row lg:overflow-hidden">
       <div className="relative h-[60vh] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
         <MapCanvas
-          active={active}
-          choropleth={choropleth}
-          unit={unit}
-          onGisStatus={setGisStatus}
-          focus={
-            selected ? { id: selected.id, points: selected.points, label: selected.address } : null
-          }
+          femaTiles={layers.fema}
+          geoLayers={display.geoLayers}
+          overlays={overlays}
+          parcelOutlines={outlines.outlines}
+          onViewportChange={setViewport}
+          selected={selected}
+          candidates={candidateParcels}
+          highlightId={highlightId}
+          onMapClick={handleMapClick}
+          onSelectCandidate={selectParcel}
         />
 
         {/* Task list toggle */}
@@ -199,15 +354,33 @@ function MapPage() {
 
         {/* Layer control, top-left */}
         <LayerControl
-          active={active}
-          toggle={toggle}
-          choropleth={choropleth}
-          onChoropleth={setChoropleth}
-          unit={unit}
-          onUnit={setUnit}
-          gisStatus={gisStatus}
-          className="top-4"
+          layers={layers}
+          toggle={toggleLayer}
+          status={layerStatus}
+          className="top-[4.25rem] sm:top-4"
         />
+
+        <MapLegend layers={layers} className="absolute right-3 bottom-36 z-10" />
+
+        {/* Search and notices, top centre */}
+        <div className="absolute top-4 right-28 left-4 z-20 flex max-w-xl flex-col gap-2 sm:left-[20.5rem]">
+          <ParcelSearchBox onSearch={runSearch} busy={searching} initialValue={search.q ?? ""} />
+          {notice && (
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-3 rounded-xl border border-border bg-paper px-3 py-2 text-sm leading-snug text-foreground shadow-card"
+            >
+              <span>{notice}</span>
+              <button
+                onClick={() => setNotice(null)}
+                aria-label="Dismiss"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
 
         {!chatOpen && (
           <button
@@ -222,29 +395,75 @@ function MapPage() {
           </button>
         )}
 
-        <div className="absolute bottom-3 left-3 z-10 rule-label rounded-md bg-paper/85 px-2 py-1 backdrop-blur-sm">
-          Tulsa, Oklahoma · sample parcel data
+        <div className="absolute bottom-3 left-3 z-10 flex max-w-[calc(100%-14.5rem)] flex-col items-start gap-1.5 sm:left-[20.5rem] sm:max-w-none">
+          <div
+            className="rule-label rounded-md bg-paper/90 px-2 py-1 backdrop-blur-sm"
+            role="status"
+            aria-live="polite"
+          >
+            {!outlines.streetLevel
+              ? "Zoom in to street level to see parcel outlines"
+              : outlines.error
+                ? "Parcel outlines could not be loaded"
+                : outlines.outlines?.truncated
+                  ? `${outlines.outlines.count.toLocaleString()} nearest parcels shown · zoom in for more`
+                  : outlines.outlines
+                    ? `${outlines.outlines.count.toLocaleString()} parcels in view${outlines.loading ? " · updating…" : ""}`
+                    : "Loading parcel outlines…"}
+          </div>
+          <div className="rule-label rounded-md bg-paper/85 px-2 py-1 backdrop-blur-sm">
+            Tulsa County parcels · Assessor data via INCOG
+          </div>
         </div>
       </div>
 
       <aside className="flex w-full shrink-0 flex-col border-l border-border bg-paper lg:h-screen lg:w-[400px]">
         <div className={`min-h-0 overflow-y-auto ${chatOpen ? "flex-[0_0_42%]" : "flex-1"}`}>
-          <SidePanel
-            key={selected?.id ?? "none"}
-            parcel={selected}
-            orgType={orgType}
-            onOrgTypeChange={setOrgType}
-            chdoDesignated={chdoDesignated}
-            onChdoDesignatedChange={setChdoDesignated}
-            onGenerateReport={() => setReportOpen(true)}
-            onAddTask={(input) => addTask(createManualTask(input))}
-          />
+          {sampleParcel && <SampleParcelNotice address={sampleParcel.address} />}
+          {candidates ? (
+            <CandidateList
+              title={candidates.title}
+              hint={candidates.hint}
+              results={candidates.results}
+              highlightId={highlightId}
+              onHighlight={setHighlightId}
+              onSelect={selectParcel}
+            />
+          ) : selectedId === null ? (
+            <EmptyPanel />
+          ) : detail ? (
+            <ParcelPanel
+              key={detail.id}
+              detail={detail}
+              onGenerateReport={reportUnavailable}
+              onClear={clearSelection}
+            />
+          ) : detailQuery.isError ? (
+            <div className="p-8">
+              <p className="rule-label">Could not load this parcel</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                {detailQuery.error instanceof ApiError
+                  ? detailQuery.error.message
+                  : "The parcel service did not respond."}
+              </p>
+              <button
+                onClick={() => void detailQuery.refetch()}
+                className="mt-4 h-10 rounded-md border border-input bg-paper px-[18px] text-[15px] font-medium hover:border-accent hover:text-accent"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <div className="p-8" role="status">
+              <p className="rule-label">Loading parcel…</p>
+            </div>
+          )}
         </div>
         {chatOpen ? (
           <div className="fixed bottom-3 right-3 z-40 h-[min(70vh,36rem)] w-[min(400px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border shadow-popover lg:rounded-none lg:static lg:h-auto lg:min-h-0 lg:w-auto lg:flex-1 lg:border-0 lg:shadow-none">
             <ParcelChat
-              parcel={selected}
-              onSelectParcel={setSelected}
+              parcel={detail ? { address: detail.address ?? "the selected parcel" } : null}
+              onSearchResults={applySearchResults}
               onClose={() => setChatOpen(false)}
               onAddTask={(action) => addTask(createTaskFromAction(action))}
             />
@@ -252,10 +471,11 @@ function MapPage() {
         ) : null}
       </aside>
 
+      {/* Reports exist only for the dashboard's sample parcels (they need zoning). */}
       <ReportPreview
-        parcel={selected}
+        parcel={sampleParcel}
         tasks={tasks}
-        orgType={orgType}
+        orgType={null}
         open={reportOpen}
         onClose={() => setReportOpen(false)}
       />
@@ -275,96 +495,28 @@ function MapPage() {
 const BaseMap = lazy(() => import("@/components/basemap").then((m) => ({ default: m.BaseMap })));
 
 function MapCanvas({
-  active,
-  choropleth,
-  unit,
-  onGisStatus,
-  focus,
+  femaTiles,
+  geoLayers,
+  overlays,
+  parcelOutlines,
+  onViewportChange,
+  selected,
+  candidates,
+  highlightId,
+  onMapClick,
+  onSelectCandidate,
 }: {
-  active: Record<LayerId, boolean>;
-  choropleth: ChoroplethId | null;
-  unit: UnitSize;
-  onGisStatus: (s: Record<string, GisStatus>) => void;
-  focus: { id: string; points: [number, number][]; label: string } | null;
+  femaTiles: boolean;
+  geoLayers: GeoLayerRender[];
+  overlays: OverlayRender[];
+  parcelOutlines: OutlineCollection | null;
+  onViewportChange: (v: Viewport) => void;
+  selected: SelectedParcel | null;
+  candidates: CandidateParcel[];
+  highlightId: number | null;
+  onMapClick: (lat: number, lng: number, zoom: number) => void;
+  onSelectCandidate: (id: number) => void;
 }) {
-  // Layers backed by published city GIS data are drawn as real polygons by
-  // Leaflet, so they never get an illustrative rectangle.
-  const activeLayers = LAYERS.filter((l) => active[l.id] && !l.real);
-
-  const gisIds = GIS_LAYER_IDS.filter((id) => active[id]);
-  const gisQueries = useQueries({
-    queries: GIS_LAYER_IDS.map((id) => ({
-      queryKey: ["tulsa-gis", id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => fetchGisLayer(id, signal),
-      enabled: active[id],
-      staleTime: 1000 * 60 * 60,
-      gcTime: 1000 * 60 * 60,
-    })),
-  });
-
-  useEffect(() => {
-    const status: Record<string, GisStatus> = {};
-    GIS_LAYER_IDS.forEach((id, i) => {
-      const q = gisQueries[i];
-      if (!active[id] || !q) return;
-      status[id] = q.data ? q.data.source : q.isError ? "error" : "loading";
-    });
-    onGisStatus(status);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    JSON.stringify(
-      GIS_LAYER_IDS.map((id, i) => [
-        active[id],
-        gisQueries[i]?.data?.source,
-        gisQueries[i]?.isError,
-      ]),
-    ),
-  ]);
-
-  // Recomputed every render on purpose: BaseMap diffs by layer id, so handing
-  // it a fresh array is cheap and avoids stale-memo races while data loads.
-  const geoLayers = gisIds.flatMap((id) => {
-    const q = gisQueries[GIS_LAYER_IDS.indexOf(id)];
-    const layer = LAYERS.find((l) => l.id === id);
-    if (!q?.data || !layer) return [];
-    return [{ id, data: q.data.data, color: layer.color }];
-  });
-  // Three or more stacked boundaries become unreadable as fills.
-  const outlineOnly = activeLayers.length > 2;
-
-  const artwork = (
-    <g>
-      {/* graduated choropleth — at most one, drawn beneath the boundaries */}
-      {choropleth && <ChoroplethLayer id={choropleth} unit={unit} />}
-
-      {/* overlay layers */}
-      {activeLayers.map((l) => (
-        <g key={l.id}>
-          <rect
-            x={l.rect.x}
-            y={l.rect.y}
-            width={l.rect.w}
-            height={l.rect.h}
-            fill={outlineOnly ? "none" : l.color}
-            fillOpacity={outlineOnly ? 0 : 0.14}
-            stroke={l.color}
-            strokeWidth={outlineOnly ? 2.5 : 2}
-            strokeDasharray="8 5"
-          />
-          <text
-            x={l.rect.x + 8}
-            y={l.rect.y + 18}
-            fontFamily="var(--font-mono)"
-            fontSize={11}
-            fill={l.color}
-          >
-            {l.name.toUpperCase()}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
-
   return (
     // z-0 creates a stacking context so Leaflet's internal high z-indexes
     // (tiles 200, panes 400+, controls 1000) stay inside the map and cannot
@@ -372,529 +524,161 @@ function MapCanvas({
     <div className="absolute inset-0 z-0">
       <ClientOnly fallback={<div className="band-soft absolute inset-0" />}>
         <Suspense fallback={<div className="band-soft absolute inset-0" />}>
-          <BaseMap femaFloodplain={!!active.fema} geoLayers={geoLayers} focus={focus}>
-            {artwork}
-          </BaseMap>
+          <BaseMap
+            femaFloodplain={femaTiles}
+            geoLayers={geoLayers}
+            selected={selected}
+            candidates={candidates}
+            highlightId={highlightId}
+            onMapClick={onMapClick}
+            onSelectCandidate={onSelectCandidate}
+            parcelOutlines={parcelOutlines}
+            overlays={overlays}
+            onViewportChange={onViewportChange}
+          />
         </Suspense>
       </ClientOnly>
     </div>
   );
 }
 
-function ChoroplethLayer({ id, unit }: { id: ChoroplethId; unit: UnitSize }) {
-  const range = choroplethRange(id, unit);
-  const isTract =
-    id === "poverty" || id === "mfi" || id === "unemployment" || id === "nmtc-eligible";
-  const money = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
+/* ------------------------------- side panel ------------------------------ */
 
-  if (isTract) {
-    return (
-      <g>
-        {TRACTS.map((t) => {
-          const v = tractValue(id, t);
-          const passes = meetsThreshold(id, v);
-          return (
-            <g key={t.geoid}>
-              <rect
-                x={t.rect.x}
-                y={t.rect.y}
-                width={t.rect.w}
-                height={t.rect.h}
-                fill={choroplethColor(id, v, range)}
-                fillOpacity={0.45}
-                stroke={passes ? "var(--color-accent)" : "var(--rule)"}
-                strokeWidth={passes ? 3 : 1}
-              >
-                <title>{`${t.name} — ${id === "nmtc-eligible" ? (nmtcEligible(t) ? "eligible" : "not eligible") : `${v}%`}`}</title>
-              </rect>
-              <text
-                x={t.rect.x + 8}
-                y={t.rect.y + 18}
-                fontFamily="var(--font-mono)"
-                fontSize={11}
-                fill="var(--color-foreground)"
-                pointerEvents="none"
-              >
-                {id === "nmtc-eligible" ? (nmtcEligible(t) ? "ELIGIBLE" : "NOT ELIGIBLE") : `${v}%`}
-              </text>
-            </g>
-          );
-        })}
-      </g>
-    );
-  }
+function EmptyPanel() {
+  const sources = useSources();
 
   return (
-    <g>
-      {ZIP_AREAS.map((z) => {
-        const v = zipValue(id, z, unit);
-        return (
-          <g key={z.zip}>
-            <rect
-              x={z.rect.x}
-              y={z.rect.y}
-              width={z.rect.w}
-              height={z.rect.h}
-              fill={choroplethColor(id, v, range)}
-              fillOpacity={0.45}
-              stroke="var(--rule)"
-              strokeWidth={1}
-            >
-              <title>{`${z.zip} — ${money.format(v)}`}</title>
-            </rect>
-            <text
-              x={z.rect.x + 8}
-              y={z.rect.y + 18}
-              fontFamily="var(--font-mono)"
-              fontSize={11}
-              fill="var(--color-foreground)"
-              pointerEvents="none"
-            >
-              {z.zip} · {money.format(v)}
-            </text>
-          </g>
-        );
-      })}
-    </g>
+    <div className="flex min-h-full flex-col px-6 py-8">
+      <Link to="/" className="rule-label hover:text-accent">
+        ← Collective Impact
+      </Link>
+      <p className="rule-label mt-8">Tulsa County parcels</p>
+      <h1 className="mt-3 font-heading text-2xl leading-snug font-bold text-foreground">
+        Search an address or click a parcel
+      </h1>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+        Type an address or a 14-digit parcel number in the search box, or zoom to street level and
+        click a lot. The panel then shows which TIF district, census tract, Opportunity Zone, USDA
+        area and city it sits in, checked against boundaries stored in our database.
+      </p>
+
+      <div className="mt-8 border-t border-border pt-6">
+        <p className="rule-label">Data loaded</p>
+        {sources.data ? (
+          <ul className="mt-3 space-y-2.5">
+            {sources.data.map((src) => (
+              <li key={src.sourceKey} className="text-xs leading-relaxed text-muted-foreground">
+                <span className="block text-sm text-foreground">{src.datasetName}</span>
+                {src.recordCount.toLocaleString()} records
+                {src.vintage ? ` · ${src.vintage}` : ""} · pulled {formatDate(src.pulledAt)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {sources.isError ? "The data service is not reachable." : "Loading…"}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
-/* ------------------------------- side panel ------------------------------ */
-
-function statusClass(status: ProgramStatus) {
-  if (status === "Likely eligible") return "border-primary bg-primary text-primary-foreground";
-  if (status === "May be eligible") return "border-accent text-accent";
-  return "border-border text-muted-foreground";
+function SampleParcelNotice({ address }: { address: string }) {
+  return (
+    <div className="border-b border-border bg-secondary px-6 py-4">
+      <p className="rule-label">Sample parcel from the dashboard</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        “{address}” is a made-up record from the prototype dashboard, so there is nothing to draw on
+        the real map. Search an address or click a parcel to see real data.
+      </p>
+    </div>
+  );
 }
 
-function SidePanel({
-  parcel,
-  orgType,
-  onOrgTypeChange,
-  chdoDesignated,
-  onChdoDesignatedChange,
+function ParcelPanel({
+  detail,
   onGenerateReport,
-  onAddTask,
+  onClear,
 }: {
-  parcel: Parcel | null;
-  orgType: OrgType | null;
-  onOrgTypeChange: (v: OrgType | null) => void;
-  chdoDesignated: boolean;
-  onChdoDesignatedChange: (v: boolean) => void;
+  detail: ParcelDetail;
   onGenerateReport: () => void;
-  onAddTask: (input: AddTaskInput) => void;
+  onClear: () => void;
 }) {
-  const [levelFilter, setLevelFilter] = useState<LevelFilterValue>("all");
-  const [fundingView, setFundingView] = useState<FundingView>("development");
-  const [residentView, setResidentView] = useState<"renter" | "buyer">("renter");
-  const [chosenProgram, setChosenProgram] = useState<string | null>(null);
-
-  if (!parcel) {
-    return (
-      <div className="flex h-full flex-col justify-center p-8">
-        <p className="rule-label">No parcel selected</p>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Open the AI assistant and enter an address to load its parcel record.
-        </p>
-      </div>
-    );
-  }
-
-  const zoning = ZONING[parcel.zoning];
-  const programs = programsFor(parcel);
-  const z = zoningSourceIds(parcel.zoning);
-  const overlays = LAYERS.filter((l) => parcel.layers.includes(l.id));
-
-  const citationIds = [
-    "assessor-record",
-    "assessor-value",
-    ...overlays.map((l) => `ov-${l.id}`),
-    ...programs.flatMap((p) => [
-      p.sourceId,
-      ...(PROGRAM_REQUIREMENTS[p.id] ?? []).flatMap((r) => r.sourceIds),
-    ]),
-    z.district,
-    z.uses,
-    z.height,
-    z.lot,
-    ...UNDERWRITING_CITATIONS,
-    ...RESIDENT_CITATION_IDS,
-    ...COST_SAVER_CITATION_IDS,
-    ...ALL_PLAN_CITATION_IDS,
-    ...LAYER_CITATIONS,
-    ...ORG_CITATION_IDS,
-    "pg-htc",
-    "st-shpo",
-  ];
-
-  const tract = tractFor(parcel.centroid);
-  const nmtcOk = tract ? nmtcEligible(tract) : false;
-  const inQct = parcel.layers.includes("qct");
-  const infill = LAYERS.filter((l) => l.category === "D" && parcel.layers.includes(l.id));
+  const address = detail.address ?? "No street address on record";
+  const place = [detail.city, "OK", detail.zip].filter(Boolean).join(" ");
 
   return (
-    <CitationScope ids={citationIds}>
-      <LevelFilterScope value={levelFilter}>
-        <div className="flex min-h-full flex-col">
-          <div className="border-b border-border px-6 py-5">
+    <>
+      <div className="flex min-h-full flex-col">
+        <div className="border-b border-border px-6 py-5">
+          <div className="flex items-center justify-between gap-3">
             <Link to="/" className="rule-label hover:text-accent">
               ← Collective Impact
             </Link>
-            <h1 className="mt-3 font-heading font-bold text-2xl leading-snug text-foreground">
-              {parcel.address}
-            </h1>
-            <p className="text-sm text-muted-foreground">Tulsa, OK</p>
-          </div>
-
-          <Section title="Parcel facts">
-            <dl className="divide-y divide-border border-y border-border">
-              <Fact label="Address" value={parcel.address} citeId="assessor-record" />
-              <Fact label="Parcel ID" value={parcel.parcelId} mono citeId="assessor-record" />
-              <Fact
-                label="Acreage"
-                value={`${parcel.acreage.toFixed(2)} acres`}
-                citeId="assessor-record"
-              />
-              <Fact label="Zoning code" value={zoning.label} citeId={z.district} />
-              <Fact
-                label="Assessed value"
-                value={currency.format(parcel.assessedValue)}
-                mono
-                citeId="assessor-value"
-              />
-            </dl>
-            {overlays.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {overlays.map((l) => (
-                  <span
-                    key={l.id}
-                    className="border px-2 py-0.5 text-xs rounded-md"
-                    style={{ color: l.color, borderColor: l.color }}
-                  >
-                    {l.short}
-                    <Cite id={`ov-${l.id}`} />
-                  </span>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section title="Census indicators for this tract">
-            {tract ? (
-              <>
-                <p className="text-sm text-foreground">
-                  {tract.name}
-                  <span className="ml-2 tabular-nums text-xs text-muted-foreground">
-                    {tract.geoid}
-                  </span>
-                </p>
-                <dl className="mt-3 divide-y divide-border border-y border-border">
-                  <Measure
-                    label="Poverty rate"
-                    value={`${tract.poverty.toFixed(1)}%`}
-                    threshold={`Threshold ${POVERTY_THRESHOLD}%`}
-                    margin={`${(tract.poverty - POVERTY_THRESHOLD).toFixed(1)} pts ${tract.poverty >= POVERTY_THRESHOLD ? "above" : "below"} the threshold`}
-                    passes={tract.poverty >= POVERTY_THRESHOLD}
-                    citeId="cb-acs-poverty"
-                  />
-                  <Measure
-                    label="Median family income"
-                    value={`${tract.mfiPct}% of AMI`}
-                    threshold={`Threshold ${MFI_THRESHOLD}%`}
-                    margin={`${Math.abs(tract.mfiPct - MFI_THRESHOLD)} pts ${tract.mfiPct <= MFI_THRESHOLD ? "below" : "above"} the threshold`}
-                    passes={tract.mfiPct <= MFI_THRESHOLD}
-                    citeId="cb-acs-mfi"
-                  />
-                  <Measure
-                    label="Unemployment"
-                    value={`${tract.unemployment.toFixed(1)}%`}
-                    threshold={`Benchmark ${UNEMPLOYMENT_BENCHMARK}%`}
-                    margin={`${Math.abs(tract.unemployment - UNEMPLOYMENT_BENCHMARK).toFixed(1)} pts ${tract.unemployment >= UNEMPLOYMENT_BENCHMARK ? "above" : "below"} the benchmark`}
-                    passes={tract.unemployment >= UNEMPLOYMENT_BENCHMARK}
-                    citeId="cb-acs-unemp"
-                  />
-                </dl>
-                <p className="mt-3 text-sm leading-relaxed text-foreground">
-                  NMTC status: {nmtcOk ? "eligible" : "not eligible"}
-                  <Cite id="cb-nmtc" />
-                  {nmtcOk && ` — meets the ${nmtcTestsMet(tract).join(" and the ")}.`}
-                </p>
-                <p className="mt-2 border-l-2 border-accent pl-3 text-xs leading-relaxed text-muted-foreground">
-                  Margin matters. A tract sitting just over a threshold can fall out of eligibility
-                  at the next American Community Survey release; a tract far above it is unlikely
-                  to.
-                </p>
-              </>
-            ) : (
-              <p className="border border-dashed border-accent px-3 py-2 text-xs leading-relaxed text-accent rounded-lg">
-                Tract-level figures for this parcel are not yet loaded. This is not a finding that
-                the tract fails the tests.
-              </p>
-            )}
-          </Section>
-
-          <Section title="Eligible funding">
-            <FundingViewTabs value={fundingView} onChange={setFundingView} className="mb-4" />
-            {fundingView === "development" ? (
-              <>
-                <OrgProfilePrompt value={orgType} onChange={onOrgTypeChange} className="mb-4" />
-                <LevelFilterControl
-                  value={levelFilter}
-                  onChange={setLevelFilter}
-                  className="mb-4"
-                />
-                <CoverageLegend className="mb-4" />
-                {inQct && nmtcOk && (
-                  <div className="mb-4 border-l-2 border-primary bg-secondary px-3 py-3">
-                    <p className="rule-label">Stacking opportunity — NMTC with LIHTC</p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-foreground">
-                      This parcel is in both a Qualified Census Tract
-                      <Cite id="ov-qct" />
-                      and an NMTC-eligible tract.
-                      <Cite id="ov-nmtc" />
-                      In a mixed-use building the two credits can be paired: divide the building
-                      into a condominium regime, finance the commercial or community-facility
-                      portion with New Markets credits, and finance the residential portion with
-                      housing credits. Each credit then attaches only to the component it is
-                      actually eligible for.
-                    </p>
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                      The condominium documents, cost allocation, and separate ownership entities
-                      have to be in place before either closing. Confirm the structure with tax
-                      counsel.
-                    </p>
-                  </div>
-                )}
-                {infill.length > 0 && (
-                  <div className="mb-4 border border-border px-3 py-3 rounded-lg">
-                    <p className="rule-label">Zoning overlays on this parcel</p>
-                    <ul className="mt-1.5 space-y-1.5">
-                      {infill.map((l) => (
-                        <li key={l.id} className="text-sm leading-relaxed text-foreground">
-                          {l.name}
-                          <Cite id={`ov-${l.id}`} />
-                          {l.favorable && (
-                            <span className="ml-2 border border-primary bg-primary px-1.5 py-0.5 text-[10px] tracking-wide text-primary-foreground rounded-md">
-                              Favorable for housing
-                            </span>
-                          )}
-                          <span className="block text-xs text-muted-foreground">
-                            {l.description}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {parcel.layers.includes("hp") && (
-                      <p className="mt-2 border-l-2 border-accent pl-3 text-xs leading-relaxed text-muted-foreground">
-                        HP overlay is a City of Tulsa design-review district administered by the
-                        Tulsa Preservation Commission. It is not National Register listing, and it
-                        does not by itself make the building eligible for the Historic
-                        Rehabilitation Tax Credit — that requires separate certification through the
-                        State Historic Preservation Office and the National Park Service.
-                        <Cite id="st-shpo" />
-                      </p>
-                    )}
-                  </div>
-                )}
-                <AssumedOrgNote org={orgType} className="mb-4" />
-                {groupByTier(programs, orgType, chdoDesignated).map((group) => (
-                  <div key={group.tier} className="mb-6">
-                    <TierHeading tier={group.tier} count={group.items.length} />
-                    {group.items.length === 0 ? (
-                      <p className="border-y border-border py-3 text-sm leading-relaxed text-muted-foreground">
-                        Nothing on this parcel falls in this tier for your organization.
-                      </p>
-                    ) : (
-                      <ul className="border-y border-border">
-                        {group.items.map(({ item, assessment }) => (
-                          <ProgramRow
-                            key={item.id}
-                            program={item}
-                            assessment={assessment}
-                            org={orgType}
-                            chdoDesignated={chdoDesignated}
-                            onChdoDesignatedChange={onChdoDesignatedChange}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                    {group.tier === 3 && (
-                      <>
-                        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                          Capital with no parcel test — access turns on who knows you, not where the
-                          land is. Shown here so it is on your map at all.
-                        </p>
-                        <RelationshipSources className="mt-2" />
-                      </>
-                    )}
-                  </div>
-                ))}
-              </>
-            ) : (
-              <ResidentAssistance view={residentView} onViewChange={setResidentView} />
-            )}
-          </Section>
-
-          <Section title="Free action plan">
-            {(() => {
-              const eligible = programs.filter((pr) => pr.status !== "Not eligible");
-              const chosen = eligible.find((pr) => pr.id === chosenProgram) ?? null;
-              const resolvePlan = (id: string) =>
-                id === "home-chdo"
-                  ? chdoPlanFor(chdoRouteFor(orgType, chdoDesignated) ?? "certify")
-                  : actionPlanFor(id);
-              const plan = chosen ? resolvePlan(chosen.id) : null;
-              if (!chosen) {
-                return (
-                  <ProgramSelector
-                    programs={programs}
-                    chosen={chosenProgram}
-                    onChoose={setChosenProgram}
-                    resolvePlan={resolvePlan}
-                  />
-                );
-              }
-              if (!plan) {
-                return (
-                  <LockedPlan
-                    programName={chosen.name}
-                    onChangeProgram={() => setChosenProgram(null)}
-                    onUpgrade={onGenerateReport}
-                  />
-                );
-              }
-              return (
-                <>
-                  <ActionPlanView
-                    plan={plan}
-                    onAddTask={onAddTask}
-                    onChangeProgram={() => setChosenProgram(null)}
-                  />
-                  <AssistanceInterest
-                    programId={plan.programId}
-                    programName={plan.programName}
-                    parcelId={parcel.parcelId}
-                    parcelAddress={parcel.address}
-                    className="mt-6"
-                  />
-                  <PlanUpgradeCard
-                    remaining={Math.max(eligible.length - 1, 1)}
-                    onUpgrade={onGenerateReport}
-                    className="mt-6"
-                  />
-                </>
-              );
-            })()}
-          </Section>
-
-          <Section title="Organizational status gates">
-            <StatusGates org={orgType} />
-          </Section>
-
-          <Section title="Cost and time savers">
-            <CostSavers parcel={parcel} />
-          </Section>
-
-          <Section title="Underwriting limits">
-            <UnderwritingLimits programs={programs} />
-          </Section>
-
-          <Section title="What you can build here">
-            <p className="text-sm text-foreground">
-              {zoning.label}
-              <Cite id={z.district} />
-            </p>
-            <p className="rule-label mt-4">
-              Permitted housing types
-              <Cite id={z.uses} />
-            </p>
-            <ul className="mt-2 space-y-1.5">
-              {zoning.permitted.map((t) => (
-                <li key={t} className="flex gap-2 text-sm text-foreground">
-                  <span className="text-primary-deep">▪</span>
-                  {t}
-                </li>
-              ))}
-            </ul>
-            <p className="rule-label mt-4">
-              Conditional / discretionary
-              <Cite id={z.uses} />
-            </p>
-            <ul className="mt-2 space-y-1.5">
-              {zoning.conditional.map((t) => (
-                <li key={t} className="flex gap-2 text-sm text-muted-foreground">
-                  <span className="text-accent">▫</span>
-                  {t}
-                </li>
-              ))}
-            </ul>
-            <dl className="mt-4 divide-y divide-border border-y border-border">
-              <Fact label="Max height" value={zoning.maxHeight} citeId={z.height} />
-              <Fact label="Min lot area" value={zoning.minLot} citeId={z.lot} />
-            </dl>
-            <p className="mt-4 border-l-2 border-accent pl-3 text-xs leading-relaxed text-muted-foreground">
-              Preliminary zoning summary. Dimensional standards, overlays, and platting requirements
-              can change what is actually buildable — confirm with the City of Tulsa Planning Office
-              before relying on this.
-            </p>
-          </Section>
-
-          <Section title="References">
-            <ReferenceList title="Sources cited in this panel" />
-          </Section>
-
-          <div className="mt-auto border-t border-border bg-paper-deep p-6">
-            <button
-              onClick={onGenerateReport}
-              className="w-full border border-primary bg-primary px-4 py-3.5 text-sm font-medium tracking-wide text-primary-foreground transition-colors hover:bg-primary-hover rounded-md"
-            >
-              Generate report for this parcel
+            <button onClick={onClear} className="rule-label hover:text-accent">
+              Clear ✕
             </button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              Prototype — all records shown are sample data.
-            </p>
           </div>
+          <h1 className="mt-3 font-heading font-bold text-2xl leading-snug text-foreground">
+            {address}
+          </h1>
+          <p className="text-sm text-muted-foreground">{place}</p>
         </div>
-      </LevelFilterScope>
-    </CitationScope>
-  );
-}
 
-function Measure({
-  label,
-  value,
-  threshold,
-  margin,
-  passes,
-  citeId,
-}: {
-  label: string;
-  value: string;
-  threshold: string;
-  margin: string;
-  passes: boolean;
-  citeId: string;
-}) {
-  return (
-    <div className="grid gap-1 py-2.5 sm:grid-cols-[8rem_minmax(0,1fr)]">
-      <dt className="rule-label">
-        {label}
-        <Cite id={citeId} />
-      </dt>
-      <dd>
-        <span
-          className={`tabular-nums text-sm ${passes ? "text-primary-deep" : "text-foreground"}`}
-        >
-          {value}
-        </span>
-        <span className="ml-2 text-xs text-muted-foreground">{threshold}</span>
-        <span className="block text-xs text-muted-foreground">{margin}</span>
-      </dd>
-    </div>
+        <Section title="Where this parcel sits">
+          <OverlayReadout detail={detail} />
+        </Section>
+
+        <Section title="Parcel facts">
+          <dl className="divide-y divide-border border-y border-border">
+            <Fact label="Address" value={address} />
+            <Fact label="Parcel number" value={detail.parcelNumber ?? "—"} mono />
+            {detail.accountNumber && <Fact label="Account" value={detail.accountNumber} mono />}
+            <Fact
+              label="Acreage"
+              value={detail.acres !== null ? `${detail.acres.toFixed(2)} acres` : "—"}
+            />
+            <Fact label="Land use" value={detail.landUse ?? "—"} />
+            {detail.yearBuilt && <Fact label="Year built" value={String(detail.yearBuilt)} mono />}
+            <Fact
+              label="Assessed value"
+              value={detail.assessedTotal !== null ? currency.format(detail.assessedTotal) : "—"}
+              mono
+            />
+            {detail.landValue !== null && detail.improvementValue !== null && (
+              <Fact
+                label="Of which"
+                value={`land ${currency.format(detail.landValue)} · improvements ${currency.format(detail.improvementValue)}`}
+              />
+            )}
+          </dl>
+          {detail.legalDescription && (
+            <details className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              <summary className="cursor-pointer rule-label">Legal description</summary>
+              <p className="mt-2">{detail.legalDescription}</p>
+            </details>
+          )}
+          <ParcelSourceLine detail={detail} />
+        </Section>
+
+        <Section title="References">
+          <SourceReferences />
+        </Section>
+
+        <div className="mt-auto border-t border-border bg-paper-deep p-6">
+          <button
+            onClick={onGenerateReport}
+            className="w-full rounded-md border border-input bg-paper px-4 py-3.5 text-sm font-medium tracking-wide text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+          >
+            Generate report for this parcel
+          </button>
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Reports aren't available for real parcels yet.
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -925,168 +709,6 @@ function Fact({
         {value}
         {citeId && <Cite id={citeId} />}
       </dd>
-    </div>
-  );
-}
-
-function ProgramRow({
-  program,
-  assessment,
-  org,
-  chdoDesignated,
-  onChdoDesignatedChange,
-}: {
-  program: ReturnType<typeof programsFor>[number];
-  assessment: AccessAssessment;
-  org: OrgType | null;
-  chdoDesignated: boolean;
-  onChdoDesignatedChange: (v: boolean) => void;
-}) {
-  const isChdo = program.id === "home-chdo";
-  const chdoRoute = isChdo ? chdoRouteFor(org, chdoDesignated) : null;
-  const [open, setOpen] = useState(false);
-  const coverage = PROGRAM_COVERAGE[program.id];
-  const requirements = PROGRAM_REQUIREMENTS[program.id] ?? [];
-  return (
-    <li className="border-b border-border last:border-b-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-start justify-between gap-3 py-3 text-left"
-      >
-        <span>
-          <span className="block text-sm font-medium leading-snug text-foreground">
-            {program.name}
-          </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">{program.agency}</span>
-        </span>
-        <span
-          className={`shrink-0 border px-2 py-0.5 text-[11px] leading-tight ${statusClass(program.status)} rounded-md`}
-        >
-          {program.status}
-        </span>
-      </button>
-      <AccessModelLine assessment={assessment} className="pb-2" />
-      <AccessPath assessment={assessment} className="mb-3" />
-      <WhyNotTierOne assessment={assessment} className="pb-3" />
-      <EffortVsAward assessment={assessment} className="mb-3" />
-      <DisbursementDetail id={program.disbursement} timing={program.timing} className="pb-3" />
-      {coverage && <CoverageBar coverage={coverage} className="pb-3" />}
-      <ComplexityNote programId={program.id} className="pb-3" />
-
-      {program.id === "home" && (
-        <p className="pb-3 text-xs leading-relaxed text-muted-foreground">
-          <span className="rule-label mr-2">Related</span>
-          The CHDO set-aside below is a reserved portion of this same HOME allocation — not
-          additional money. Fewer organizations may compete for it, which makes it the less
-          competitive of the two, but only organizations the City of Tulsa has certified may apply.
-          <Cite id="og-chdo-setaside" />
-        </p>
-      )}
-      {isChdo ? (
-        <ChdoRouteNote
-          route={chdoRoute}
-          designated={chdoDesignated}
-          onDesignatedChange={onChdoDesignatedChange}
-          className="pb-3"
-        />
-      ) : (
-        <OrgFitNote programId={program.id} org={org} className="pb-3" />
-      )}
-      {open && (
-        <div className="pb-4 pr-2">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {program.reason}
-            <Cite id={program.sourceId} />
-          </p>
-          {contactForProgram(program.id) && (
-            <div className="mt-3">
-              <p className="rule-label mb-1.5">Who administers it — direct contact</p>
-              <ContactBlock contact={contactForProgram(program.id)!} />
-            </div>
-          )}
-          {requirements.map((r) => (
-            <div key={r.claim} className="mt-3 border-l-2 border-primary pl-3">
-              <p className="rule-label">Governed at multiple levels</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-foreground">
-                {r.claim}
-                <CiteStack ids={r.sourceIds} />
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </li>
-  );
-}
-
-function ChdoRouteNote({
-  route,
-  designated,
-  onDesignatedChange,
-  className = "",
-}: {
-  route: ReturnType<typeof chdoRouteFor>;
-  designated: boolean;
-  onDesignatedChange: (v: boolean) => void;
-  className?: string;
-}) {
-  const copy = route ? CHDO_ROUTE_COPY[route] : null;
-  const badgeClass =
-    route === "designated"
-      ? "border-primary bg-primary text-primary-foreground"
-      : route === "certify"
-        ? "border-accent text-accent"
-        : "border-accent text-accent";
-
-  return (
-    <div className={className}>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        <span className="rule-label mr-2">Related</span>
-        Reserved portion of the general HOME allocation above — same money, smaller field of
-        applicants, restricted to designated organizations.
-        <Cite id="og-chdo-setaside" />
-      </p>
-
-      {copy ? (
-        <div className="mt-2.5 border-l-2 border-primary pl-3">
-          <span
-            className={`inline-block border px-2 py-0.5 text-[11px] leading-tight ${badgeClass} rounded-md`}
-          >
-            {copy.badge}
-          </span>
-          <p className="mt-1.5 text-sm font-medium text-foreground">
-            {copy.headline}
-            <Cite id="og-chdo-pj" />
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{copy.detail}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            Open the free action plan below for the{" "}
-            {route === "partner"
-              ? "partnership route — the CHDO's role in the deal and the jurisdiction's certified list"
-              : route === "certify"
-                ? "certification process with the City of Tulsa"
-                : "application into the reserved pool"}
-            .
-          </p>
-        </div>
-      ) : (
-        <p className="mt-2.5 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
-          Tell us your organization type above and this row will show whether the reserve is
-          directly available to you, reachable through certification, or reachable through a
-          partnership with a certified CHDO. Every organization type has a path.
-        </p>
-      )}
-
-      <label className="mt-2.5 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={designated}
-          onChange={(e) => onDesignatedChange(e.target.checked)}
-          className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-primary)]"
-        />
-        <span>Our organization already holds CHDO certification from the City of Tulsa.</span>
-      </label>
     </div>
   );
 }

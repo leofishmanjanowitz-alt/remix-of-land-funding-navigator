@@ -37,4 +37,97 @@ Other scripts:
 - `npm run lint` — ESLint
 - `npm run format` — Prettier
 
+## Database (PostGIS)
+
+Parcels and every overlay are stored as PostGIS geometry (EPSG:4326). Locally the database runs in Docker.
+
+One-time setup on macOS (Colima is a free Docker runtime):
+
+```sh
+brew install colima docker docker-compose
+colima start --cpu 2 --memory 4 --disk 30
+cp .env.example .env.local
+```
+
+Then:
+
+```sh
+npm run db:up        # build and start Postgres 17 + PostGIS on 127.0.0.1:54329
+npm run db:migrate   # apply db/migrations/*.sql
+npm run db:psql      # open a SQL prompt
+npm run db:down      # stop (data is kept in a Docker volume)
+```
+
+After a restart of the Mac, run `colima start` before `npm run db:up`.
+
+### Loading data
+
+Each source has its own ingest script. Every run keeps a raw copy under `data/raw/<source>/<date>/` (git-ignored), loads a staging table, then swaps the normalized rows in inside one transaction and records a row in `source_pulls` (publisher, URL, vintage, pull date, the source's own last-edit date, row count, licence note).
+
+```sh
+npm run ingest:all            # everything, in dependency order (about 15 minutes)
+
+npm run ingest:parcels        # Tulsa County parcels from INCOG (~285k)
+npm run ingest:municipalities # every municipality's city limits in the county (INCOG)
+npm run ingest:council        # City of Tulsa council districts
+npm run ingest:tif            # TIF districts, dissolved from the parcels' IncrementDist
+npm run ingest:hud            # HUD QCT + DDA, newest designation year available
+npm run ingest:usda           # USDA rural-ineligible areas (data.gov shapefile)
+npm run ingest:oz             # Opportunity Zones (CDFI Fund shapefile)
+```
+
+| Table                        | Source                                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parcels`                    | INCOG `Parcels_TulsaCo` (data: Tulsa County Assessor). Source-neutral columns; INCOG's own fields stay in `raw`.                                                                         |
+| `overlay_tif`                | Derived: INCOG parcels dissolved by the Assessor's `IncrementDist`.                                                                                                                      |
+| `overlay_qct`, `overlay_dda` | HUD eGIS, newest vintage.                                                                                                                                                                |
+| `overlay_usda_ineligible`    | USDA Rural Development. These are _ineligible_ areas: rural-eligible means outside all of them.                                                                                          |
+| `jurisdictions`              | `municipality`: INCOG city-limits layers, one row per municipality with parcels in Tulsa County (a parcel in none is unincorporated). `council_district`: City of Tulsa GIS, Tulsa only. |
+| `overlay_oz`                 | CDFI Fund: tracts designated in 2018 under the 2017 Tax Cuts and Jobs Act.                                                                                                               |
+
+`parcel_overlays(parcel_id)` answers which overlays a parcel is in by spatial intersection. It returns a row for every overlay kind, so "in none" is an explicit answer:
+
+- `inside`: more than 99% of the parcel's area is in the overlay
+- `partial`: between 1% and 99%
+- `outside`: under 1% (slivers from mismatched source boundaries do not count)
+- `boundary`: council districts only. The parcel is in Tulsa but sits in a gap between the city-limits and council-district sources, so it is assigned the district it overlaps most (or the nearest one)
+- `not_loaded`: that overlay has not been ingested
+
+Every kind is a positive finding. `usda_rural` `inside` means the parcel is in USDA's rural-eligible area (outside the ineligible polygons). A parcel in no municipality gets the name "Unincorporated Tulsa County". Council districts apply only to parcels in Tulsa.
+
+Each row also carries `vintage` (designation year or file date, else the source's last-edit date) and `boundary_basis` (what the boundaries are drawn on: QCT 2026 on 2020 census tracts, Opportunity Zones 2018 on 2010 tracts, DDA 2026 on ZIP code tabulation areas).
+
+Only the source fields the app uses are downloaded. Owner names, mailing addresses, sale prices and dates, exemptions and building details are never requested from the county service, so they are not in the raw copies, staging or `parcels`.
+
+### API
+
+Server routes in this app, all answered from PostGIS (no outside service is called at request time):
+
+| Route                                   | Returns                                                                                                                                                                                                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/parcels/search?q=`            | Up to 8 parcels for an address ("112 South Elgin Avenue", "2645 E 5th St") or a county parcel/account number. Matching is scripted string normalization plus trigram similarity.                                                                                        |
+| `GET /api/parcels/at?lat=&lng=`         | The parcel under a point. If the point is on a street, rail line or water it says so (`surface`) instead of returning a parcel.                                                                                                                                         |
+| `GET /api/parcels/:id`                  | Parcel facts, outline, every overlay result from `parcel_overlays`, and a plain-language `designations.message` (including when the parcel is in none).                                                                                                                 |
+| `GET /api/parcels/outlines?bbox=&zoom=` | Parcel outlines for the map view. Served only at zoom 16 and closer and capped at 4,000 (the ones nearest the centre first, with `truncated: true` when the cap cut any), so the browser never loads the whole county.                                                  |
+| `GET /api/overlays/:kind`               | One overlay's simplified display boundaries as GeoJSON (about 3 m tolerance, from the `display_geom` column) with its pull record. Intersection checks use the exact geometry. Kinds: `tif`, `qct`, `dda`, `oz`, `usda_ineligible`, `municipality`, `council_district`. |
+| `GET /api/sources`                      | Every source currently loaded, with vintage and pull dates.                                                                                                                                                                                                             |
+
+### The map
+
+`/map` is wired to the database through those routes: a search box and click-to-select, a readout from `/api/parcels/:id` (every overlay result with its vintage and pull date, and a plain statement when a parcel is in none), parcel outlines at street level, and a toggle and legend entry for every overlay. Several parcels at one address open a numbered pick list and nothing is auto-selected. The chat's address lookup uses the same search. Shareable links: `/map?parcel=<id>`, `/map?q=<search>`, `/map?layers=all` (or a comma list such as `tif,qct,municipality`).
+
+Floodplains (City of Tulsa and FEMA) and zoning are display-only layers: they are drawn for reference and are not used in any result. The zoning profile, census indicators and several other site tests are not part of the parcel check yet, so the funding list shows "may be eligible" for programs that depend on them.
+
+`src/lib/tulsa-map-data.ts` is sample data kept only for the dashboard, KPI and report pages. The map does not use it.
+
+Only `parcel_type` `parcel` and `condo` are searchable or selectable. Rights-of-way, rail, water and `other` (divided-interest) records never appear in results.
+
+The INCOG service publishes no licence. Before a public launch, get written confirmation from INCOG / the Tulsa County Assessor that the parcel data may be displayed.
+
+### Verifying
+
+With the database loaded and the app running, `npm run verify` checks known parcels against the API (for example 112 S ELGIN AV E must be in TIF district T13 and an Opportunity Zone, and not in a QCT or DDA; 2645 E 5 ST S must return 7 parcels and be partly in a QCT and an Opportunity Zone). It reads `source_pulls` from the database to check the readout's References (so `DATABASE_URL` must be set; `npm run verify` loads `.env.local`; `VERIFY_CHECK_LINKS=1` also requests every link). It also drives headless Chrome to confirm every map layer draws when switched on and is removed when switched off (`VERIFY_SKIP_BROWSER=1` skips that). It prints PASS/FAIL per check and exits non-zero on any failure.
+
+`npm run bench` times 10 searches and 10 map clicks in headless Chrome, from the action to the parcel readout being on screen (`BENCH_BASE_URL` points it at another server). Both need Google Chrome (`CHROME_PATH` overrides its location). `VERIFY_BASE_URL` points it at another server.
+
 Feature plans from earlier development are in `docs/plans/`.

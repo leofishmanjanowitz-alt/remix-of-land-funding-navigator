@@ -1,0 +1,32 @@
+# Local development database: Postgres 17 + PostGIS.
+#   npm run db:up      start (builds the image the first time)
+#   npm run db:migrate apply db/migrations
+#   npm run db:down    stop (data is kept in the named volume)
+services:
+  db:
+    build: ./db
+    image: collective-impact-postgis:17
+    container_name: collective-impact-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-collective}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-collective_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-collective_impact}
+    ports:
+      # Non-default host port so it never collides with another local Postgres.
+      - "127.0.0.1:${POSTGRES_PORT:-54329}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Raw source downloads, readable by shp2pgsql inside the container.
+      - ./data/raw:/data/raw:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-collective} -d ${POSTGRES_DB:-collective_impact}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

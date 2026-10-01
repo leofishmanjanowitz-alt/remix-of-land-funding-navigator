@@ -1,18 +1,21 @@
 /**
- * Real published GIS layers for Tulsa.
+ * Display-only layers from the City of Tulsa's published ArcGIS services: regulatory
+ * floodplains and base zoning.
  *
- * Each layer is fetched live from the publishing agency's ArcGIS REST service.
- * If that request fails (server down, offline, slow network) we fall back to a
- * simplified copy of the same dataset saved in `src/data/`, and the UI says so.
+ * They are drawn for reference and are NOT part of the parcel check: no result, eligibility
+ * finding or program test reads them. (The overlays that are checked live in the database;
+ * see db/migrations and scripts/ingest.)
  *
- * The saved copies were taken on the date in SNAPSHOT_DATE below.
+ * Each layer is fetched live from the City's service. If that request fails (server down,
+ * offline, slow network) we fall back to a simplified copy of the same dataset saved in
+ * `src/data/`, and the layer panel says so. The saved copies were taken on SNAPSHOT_DATE.
  */
 
 import type { LayerId } from "./tulsa-map-data";
 
 export const SNAPSHOT_DATE = "2026-09-18";
 
-export type GisLayerId = Extract<LayerId, "tif" | "fema" | "zoning">;
+export type GisLayerId = Extract<LayerId, "fema" | "zoning">;
 
 export type GeoJsonFeatureCollection = {
   type: "FeatureCollection";
@@ -42,20 +45,6 @@ interface GisSource {
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 export const GIS_SOURCES: Record<GisLayerId, GisSource> = {
-  tif: {
-    url: "https://services3.arcgis.com/ratx1xWpTPZDmMzX/arcgis/rest/services/Tulsa_TIF_Districts/FeatureServer/76",
-    outFields: "Name,District,Acres",
-    offset: 0,
-    attribution: "Tulsa tax increment district boundaries (ArcGIS Online)",
-    label: (p) => str(p["Name"]) || "TIF district",
-    detail: (p) => {
-      const d = str(p["District"]);
-      const raw = p["Acres"];
-      const acres = typeof raw === "number" ? `${Math.round(raw)} acres` : "";
-      return [d, acres].filter(Boolean).join(" · ") || null;
-    },
-    cachedUrl: () => import("@/data/tulsa-tif.geojson.json?url").then((m) => m.default),
-  },
   fema: {
     url: "https://services2.arcgis.com/XkZ90iCdbTJ9oNXl/arcgis/rest/services/Floodplains_OpenData/FeatureServer/0",
     outFields: "FLD_TYPE,COMMENT",
@@ -75,12 +64,6 @@ export const GIS_SOURCES: Record<GisLayerId, GisSource> = {
     cachedUrl: () => import("@/data/tulsa-zoning.geojson.json?url").then((m) => m.default),
   },
 };
-
-export const GIS_LAYER_IDS = Object.keys(GIS_SOURCES) as GisLayerId[];
-
-export function isGisLayer(id: LayerId): id is GisLayerId {
-  return (GIS_LAYER_IDS as string[]).includes(id);
-}
 
 export type GisStatus = "live" | "cached" | "loading" | "error";
 
